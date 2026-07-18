@@ -64,7 +64,7 @@ interface GameEngine<S, M> {
 | GAME-011 | Checkers enforces forced captures and multi-jump continuation; kings move/capture backwards. | auto |
 | GAME-012 | Ultimate tic-tac-toe enforces the dictated-sub-board rule including the free-choice case for decided/full boards. | auto |
 | GAME-013 | Hangman validates the word against the dictionary by default; `ignore_dictionary` skips it; length/word-count caps are always enforced (GAME word rules above). | auto |
-| GAME-014 | Hangman phrases display word boundaries: unguessed letters are masked but spaces are visible in the guesser's view; the setter's word is never present in the guesser/spectator view payload while ongoing. | auto |
+| GAME-014 | Hangman phrases display word boundaries: unguessed letters are masked but spaces are visible in the guesser's view; the setter's word is never present in the guesser/spectator view payload while ongoing, and the event feeds redact the word from `game.created` payloads until the game finishes. | auto |
 | GAME-015 | Resigning ends the game as a win for the opponent (`game.finished`, result "win", journal entry says "resigned"). | auto |
 | GAME-016 | A challenge creates a notification-feed item for the invited profile (see NOTIF-002). | auto |
 | GAME-017 | Tic-tac-toe detects wins on rows/columns/diagonals and draws on a full board. | auto |

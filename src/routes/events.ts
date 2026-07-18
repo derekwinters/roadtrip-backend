@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { requireProfile } from '../auth.js'
 import { listEvents } from '../events/store.js'
+import { redactOngoingHangmanWords } from '../games/service.js'
 
 const querySchema = z.object({
   after: z.coerce.number().int().nonnegative().default(0),
@@ -24,6 +25,7 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const nextAfter = events.length > 0 ? events[events.length - 1]!.seq : q.after
-    return { events, next_after: nextAfter }
+    // Hangman words never leak through the family-visible feed while a game runs (GAME-014).
+    return { events: await redactOngoingHangmanWords(app.pool, events), next_after: nextAfter }
   })
 }
