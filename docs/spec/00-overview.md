@@ -64,7 +64,8 @@ Backend areas: **SYS** (architecture), **EVT** (event model), **API** (API conve
 **PRO** (profiles), **CFG** (config), **SYNC** (offline sync), **LOC** (location pipeline),
 **GEO** (geocoding), **GSR** (address search / geocode proxy), **JRNL** (journal),
 **LIST** (checklist), **SUM** (summaries), **GAME** (games), **NOTIF** (notifications),
-**SIM** (simulator + seed), **REL** (release engineering), **TRIP** (multiple road trips).
+**SIM** (simulator + seed), **REL** (release engineering), **TRIP** (multiple road trips),
+**BNG** (license plate bingo).
 
 Android areas are specified in `roadtrip-android/docs/spec/` and prefixed `AND*`.
 
@@ -85,3 +86,4 @@ Android areas are specified in `roadtrip-android/docs/spec/` and prefixed `AND*`
 | `11-release-engineering.md` | Versioning (release-please), CI artifacts, RC + final releases |
 | `12-trips.md` | Multiple road trips: parent-only start/end, per-trip history |
 | `13-geocode-search.md` | Address search proxy: parent-only, cached, throttled, best-effort online |
+| `14-bingo.md` | License plate bingo: shared per-trip card, spot/unspot sync events, standing credit |

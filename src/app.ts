@@ -17,6 +17,7 @@ import { legRoutes } from './routes/legs.js'
 import { tripRoutes } from './routes/trip.js'
 import { tripsRoutes } from './routes/trips.js'
 import { gameRoutes } from './routes/games.js'
+import { bingoRoutes } from './routes/bingo.js'
 import { notificationRoutes } from './routes/notifications.js'
 import { geocodeRoutes } from './routes/geocode.js'
 import { GeocodeSearch, type GeocodeSearchOptions } from './geocode/search.js'
@@ -90,6 +91,7 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   await app.register(tripRoutes)
   await app.register(tripsRoutes)
   await app.register(gameRoutes)
+  await app.register(bingoRoutes)
   await app.register(notificationRoutes)
   await app.register(geocodeRoutes(new GeocodeSearch(opts.pool, opts.geocode)))
 

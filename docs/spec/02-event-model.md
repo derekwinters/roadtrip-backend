@@ -12,7 +12,7 @@
 | `payload` | JSONB | Type-specific body (schemas below are normative). |
 | `client_ts` | TIMESTAMPTZ | When it happened (client clock; backdated for derived stops). |
 | `server_ts` | TIMESTAMPTZ | When the server persisted it. |
-| `trip_id` | UUID NULL | Trip whose `[started_at, ended_at)` window contains `client_ts`, resolved at insert (TRIP-004); NULL when no trip window matches. |
+| `trip_id` | UUID NULL | Trip whose `[started_at, ended_at)` window contains `client_ts`, resolved at insert (TRIP-004); NULL when no trip window matches. Planned trips have no window and never match (TRIP-013). |
 
 ## Event type catalog
 
@@ -22,6 +22,8 @@ Client-originated (accepted via sync batch or dedicated endpoints):
 |------|---------|-------------|
 | `location.ping` | `{lat, lon, accuracy_m?, speed_mps?}` | parent phone only |
 | `journal.post` | `{text}` (1–2000 chars) | any profile |
+| `plate.spotted` | `{state_code}` (bundled states + DC) | any profile (license plate bingo, see 14-bingo.md) |
+| `plate.unspotted` | `{state_code}` (bundled states + DC) | any profile (license plate bingo, see 14-bingo.md) |
 
 Server-derived (never accepted from clients):
 
@@ -54,7 +56,7 @@ Game events are recorded by the game endpoints (online-only actions); `location.
 | EVT-001 | Inserting an event with an `event_id` that already exists is a no-op reported as `duplicate`; the stored event is unchanged (idempotent sync retries). | auto |
 | EVT-002 | `seq` is strictly increasing and unique across all events; clients can use `after=seq` as an exclusive cursor and never miss or double-receive an event. | auto |
 | EVT-003 | Every event type in this catalog has a Zod payload schema; events with malformed payloads are rejected with a 400 and are not persisted. | auto |
-| EVT-004 | Client-originated types are limited to `location.ping` and `journal.post` via sync; attempts to sync server-derived types are rejected per-event as `rejected` with reason `forbidden_type`. | auto |
+| EVT-004 | Client-originated types are limited to the catalog above (`location.ping`, `journal.post`, `plate.spotted`, `plate.unspotted`) via sync; attempts to sync server-derived types are rejected per-event as `rejected` with reason `forbidden_type`. | auto |
 | EVT-005 | `location.ping` events are only accepted from profiles with the parent role; kid profiles get per-event `rejected` with reason `not_parent`. | auto |
 | EVT-006 | Events preserve `client_ts` as supplied and record independent `server_ts`; journal ordering uses `client_ts` (see JRNL-002). | auto |
 | EVT-007 | `GET /api/events?after=<seq>&limit=<n>&types=<csv>` returns events in `seq` order, filtered by type when given, with `next_after` cursor. | auto |

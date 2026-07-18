@@ -17,6 +17,7 @@ tags:
   - { name: location }
   - { name: trips }
   - { name: games }
+  - { name: bingo }
   - { name: notifications }
   - { name: geocode }
 
@@ -107,16 +108,27 @@ paths:
   /api/destinations:
     get:
       tags: [destinations]
-      summary: Ordered destination list
+      summary: >
+        Ordered destination list. Default scope is the active trip (else the unassociated
+        pool); ?trip=<id> lists any known trip's destinations, including a planned trip's
+        staged list (TRIP-005/014).
+      parameters:
+        - { $ref: '#/components/parameters/DestinationTrip' }
       responses:
         '200':
           description: Destinations
           content:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/Destination' } }
+        '404': { $ref: '#/components/responses/NotFound' }
     post:
       tags: [destinations]
-      summary: Add destination (parent only)
+      summary: >
+        Add destination (parent only). With ?trip=<plannedId> the destination is staged
+        against the planned trip (TRIP-014); 404 unknown trip, 409 when the trip is not
+        planned.
+      parameters:
+        - { $ref: '#/components/parameters/DestinationTrip' }
       requestBody:
         required: true
         content:
@@ -131,12 +143,18 @@ paths:
                 order_index: { type: integer }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Destination' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Trip is not planned, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/destinations/{id}:
     patch:
       tags: [destinations]
-      summary: Edit destination (parent only)
-      parameters: [{ $ref: '#/components/parameters/Id' }]
+      summary: >
+        Edit destination (parent only). With ?trip=<id> the destination must belong to that
+        trip (TRIP-014); 404 otherwise.
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - { $ref: '#/components/parameters/DestinationTrip' }
       requestBody:
         content:
           application/json:
@@ -149,12 +167,18 @@ paths:
                 order_index: { type: integer }
       responses:
         '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Destination' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
     delete:
       tags: [destinations]
-      summary: Remove a pending destination (parent only)
-      parameters: [{ $ref: '#/components/parameters/Id' }]
+      summary: >
+        Remove a pending destination (parent only). With ?trip=<id> the destination must
+        belong to that trip (TRIP-014); 404 otherwise.
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - { $ref: '#/components/parameters/DestinationTrip' }
       responses:
         '204': { description: Removed }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: Only pending destinations can be removed }
 
   /api/sync/batch:
@@ -309,7 +333,9 @@ paths:
               schema: { type: array, items: { $ref: '#/components/schemas/Trip' } }
     post:
       tags: [trips]
-      summary: Start a road trip (parent only, TRIP-001)
+      summary: >
+        Start a road trip (parent only, TRIP-001), or create a planned one with
+        status:"planned" (TRIP-013; at most one planned trip, no window until started).
       requestBody:
         content:
           application/json:
@@ -317,15 +343,19 @@ paths:
               type: object
               properties:
                 name: { type: string, minLength: 1, maxLength: 80, description: defaults to "Road Trip <start date>" }
+                status: { enum: [active, planned], default: active }
+                planned_start_at: { type: string, format: date-time, description: informational only (TRIP-016); requires status "planned" }
       responses:
-        '201': { description: Trip started, content: { application/json: { schema: { $ref: '#/components/schemas/Trip' } } } }
+        '201': { description: Trip started or planned, content: { application/json: { schema: { $ref: '#/components/schemas/Trip' } } } }
         '403': { $ref: '#/components/responses/Forbidden' }
-        '409': { description: A trip is already active, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '409': { description: A trip is already active / a planned trip already exists, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/trips/{id}:
     patch:
       tags: [trips]
-      summary: Rename a trip (parent only, TRIP-003)
+      summary: >
+        Rename a trip (parent only, TRIP-003); while planned, planned_start_at can be
+        updated too (TRIP-016).
       parameters: [{ $ref: '#/components/parameters/Id' }]
       requestBody:
         required: true
@@ -333,12 +363,35 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name]
               properties:
                 name: { type: string, minLength: 1, maxLength: 80 }
+                planned_start_at: { type: string, format: date-time, nullable: true }
       responses:
-        '200': { description: Renamed, content: { application/json: { schema: { $ref: '#/components/schemas/Trip' } } } }
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Trip' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: planned_start_at can only be set on a planned trip, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    delete:
+      tags: [trips]
+      summary: Delete a planned trip and its staged destinations (parent only, TRIP-017)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '204': { description: Planned trip removed }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Only planned trips can be deleted, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/trips/{id}/start:
+    post:
+      tags: [trips]
+      summary: >
+        Activate a planned trip (parent only, TRIP-015): status becomes active,
+        started_at = now, trip.started is emitted, and the staged destinations become the
+        active trip's list.
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Trip activated, content: { application/json: { schema: { $ref: '#/components/schemas/Trip' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Trip is not planned / another trip is active, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/trips/{id}/end:
     post:
@@ -457,6 +510,19 @@ paths:
                   events: { type: array, items: { $ref: '#/components/schemas/Event' } }
                   next_after: { type: integer }
 
+  /api/bingo:
+    get:
+      tags: [bingo]
+      summary: >
+        License plate bingo card (BNG-004): spotted cells, the chronological log of
+        effective spots/removals, and per-profile standing counts. Folded from plate.*
+        events in client_ts order; scoped per trip (TRIP-007).
+      parameters:
+        - { $ref: '#/components/parameters/TripScope' }
+      responses:
+        '200': { description: Bingo card, content: { application/json: { schema: { $ref: '#/components/schemas/BingoCard' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /api/notifications:
     get:
       tags: [notifications]
@@ -522,7 +588,17 @@ components:
       schema: { type: string, format: uuid }
       description: >
         Trip scope (TRIP-007). Defaults to the active trip, else the most recently ended
-        trip; unscoped (whole stream) only when no trips exist. Unknown ids are 404.
+        trip; unscoped (whole stream) only when no trips exist. Planned trips are never a
+        default scope (TRIP-013). Unknown ids are 404.
+    DestinationTrip:
+      name: trip
+      in: query
+      required: false
+      schema: { type: string, format: uuid }
+      description: >
+        Destination trip targeting (TRIP-014): on GET, list this trip's destinations; on
+        POST, stage into this (planned) trip; on PATCH/DELETE, require the destination to
+        belong to this trip. Unknown ids are 404.
   responses:
     Forbidden:
       description: Parent role or invite required
@@ -603,7 +679,7 @@ components:
       required: [event_id, type, client_ts, payload]
       properties:
         event_id: { type: string, format: uuid }
-        type: { enum: [location.ping, journal.post] }
+        type: { enum: [location.ping, journal.post, plate.spotted, plate.unspotted] }
         client_ts: { type: string, format: date-time }
         payload: { type: object }
     Event:
@@ -620,13 +696,14 @@ components:
         trip_id: { type: string, format: uuid, nullable: true, description: trip window containing client_ts (TRIP-004) }
     Trip:
       type: object
-      required: [id, name, status, started_at]
+      required: [id, name, status]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        status: { enum: [active, ended] }
-        started_at: { type: string, format: date-time }
+        status: { enum: [planned, active, ended] }
+        started_at: { type: string, format: date-time, nullable: true, description: null while planned (TRIP-013) }
         ended_at: { type: string, format: date-time, nullable: true }
+        planned_start_at: { type: string, format: date-time, nullable: true, description: informational only (TRIP-016) }
     DeepLink:
       type: object
       required: [kind]
@@ -705,6 +782,31 @@ components:
         games_played: { type: integer }
         wins_by_profile: { type: object, additionalProperties: { type: integer } }
         journal_posts_by_profile: { type: object, additionalProperties: { type: integer } }
+    BingoCell:
+      type: object
+      required: [state_code, spotted_at]
+      properties:
+        state_code: { type: string, description: 2-letter code (bundled states + DC) }
+        spotted_by: { type: string, format: uuid, nullable: true, description: standing credit holder (BNG-002) }
+        spotted_by_name: { type: string }
+        spotted_at: { type: string, format: date-time }
+    BingoLogItem:
+      type: object
+      required: [seq, action, state_code, ts]
+      properties:
+        seq: { type: integer }
+        action: { enum: [spotted, unspotted] }
+        state_code: { type: string }
+        actor_id: { type: string, format: uuid, nullable: true }
+        actor_name: { type: string }
+        ts: { type: string, format: date-time }
+    BingoCard:
+      type: object
+      required: [cells, log, counts]
+      properties:
+        cells: { type: array, items: { $ref: '#/components/schemas/BingoCell' } }
+        log: { type: array, items: { $ref: '#/components/schemas/BingoLogItem' }, description: effective spots and removals, chronological (BNG-004) }
+        counts: { type: object, additionalProperties: { type: integer }, description: standing cells per profile }
     Game:
       type: object
       required: [id, game_type, mode, status, created_by]
