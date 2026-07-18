@@ -24,19 +24,19 @@
     "chess.js": "^1.4.0",
     "fastify": "^5.6.2",
     "pg": "^8.16.0",
-    "zod": "^3.25.76"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^22.15.0",
+    "@types/node": "^26.1.0",
     "@types/pg": "^8.15.0",
     "all-the-cities": "^3.1.0",
-    "eslint": "^9.30.0",
+    "eslint": "^10.6.0",
     "topojson-client": "^3.1.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.8.0",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.35.0",
     "us-atlas": "^3.0.1",
-    "vitest": "^3.2.0",
+    "vitest": "^4.1.9",
     "word-list": "^4.1.0",
     "yaml": "^2.8.0"
   }
