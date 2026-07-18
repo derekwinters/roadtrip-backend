@@ -22,6 +22,14 @@ docker compose up --build        # API on :8080 + PostgreSQL 16
 npm run seed:demo                # optional: populate a fabricated demo day
 ```
 
+On a fresh install (zero profiles), create the first profile without authentication — it must
+be a parent; from then on profile management is parent-only:
+
+```bash
+curl -X POST localhost:8080/api/profiles -H 'content-type: application/json' \
+  -d '{"name":"Dad","avatar":"🚗","role":"parent"}'
+```
+
 Development:
 
 ```bash
@@ -47,6 +55,9 @@ read models over them:
   event, which gives lobby, challenges, spectating, and replays from one design.
 - **Sync** — clients upload queued events with client-generated UUIDs; retries are idempotent;
   downloads are cursor-paged with long-polling.
+- **Address search** — parent-only `GET /api/geocode` proxies Nominatim for destination
+  planning, with a persistent cache and 1 req/s throttling. It is the single best-effort
+  online endpoint; the trip runtime itself never needs internet.
 
 The full specification lives in [docs/spec/](docs/spec/00-overview.md) — start with the
 overview. Every behavior carries a requirement ID; CI fails if a testable requirement loses

@@ -18,6 +18,7 @@ tags:
   - { name: trips }
   - { name: games }
   - { name: notifications }
+  - { name: geocode }
 
 paths:
   /api/health:
@@ -47,7 +48,9 @@ paths:
                 items: { $ref: '#/components/schemas/Profile' }
     post:
       tags: [profiles]
-      summary: Create profile (parent only, PRO-002)
+      summary: >
+        Create profile (parent only, PRO-002). First-run bootstrap (PRO-008): while zero
+        profiles exist this is unauthenticated but must create a parent (400 otherwise).
       requestBody:
         required: true
         content:
@@ -61,6 +64,8 @@ paths:
                 role: { enum: [parent, kid] }
       responses:
         '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Profile' } } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /api/profiles/{id}:
@@ -480,6 +485,29 @@ paths:
                         link: { $ref: '#/components/schemas/DeepLink' }
                   next_after: { type: integer }
 
+  /api/geocode:
+    get:
+      tags: [geocode]
+      summary: >
+        Address search proxy (GSR-001..005). Parent-only; served from the persistent cache
+        when possible, otherwise proxied to Nominatim with >=1s throttling. Best-effort
+        online — 503 when upstream is unreachable and the query is uncached.
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
+      responses:
+        '200':
+          description: Up to 5 matches (possibly empty)
+          content:
+            application/json:
+              schema: { type: array, maxItems: 5, items: { $ref: '#/components/schemas/GeocodeMatch' } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503':
+          description: Upstream unavailable and no cached result (error.code = geocode_unavailable)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
 components:
   parameters:
     Id:
@@ -498,6 +526,11 @@ components:
   responses:
     Forbidden:
       description: Parent role or invite required
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthenticated:
+      description: Missing or unknown X-Profile-Id
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -522,6 +555,13 @@ components:
           properties:
             code: { type: string }
             message: { type: string }
+    GeocodeMatch:
+      type: object
+      required: [display_name, lat, lon]
+      properties:
+        display_name: { type: string }
+        lat: { type: number }
+        lon: { type: number }
     Profile:
       type: object
       required: [id, name, avatar, role]

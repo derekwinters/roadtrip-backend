@@ -7,7 +7,7 @@
 | `seq` | BIGSERIAL PK | Server-assigned total order; the sync cursor. |
 | `event_id` | UUID UNIQUE | Client-generated for client events, server-generated for derived events. Idempotency key. |
 | `type` | TEXT | One of the catalog below. |
-| `actor_id` | UUID NULL | Profile that caused the event; NULL for server-derived events. |
+| `actor_id` | UUID NULL | Profile that caused the event; NULL for server-derived events and for the first-run bootstrap `profile.created` (PRO-008 — there is no authenticated actor yet). |
 | `device_id` | TEXT NULL | Originating device identifier for client events. |
 | `payload` | JSONB | Type-specific body (schemas below are normative). |
 | `client_ts` | TIMESTAMPTZ | When it happened (client clock; backdated for derived stops). |
