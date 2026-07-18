@@ -30,7 +30,14 @@ export async function journalRoutes(app: FastifyInstance): Promise<void> {
        LIMIT $${args.length}`,
       args,
     )
-    const entries = rows.map(renderJournalEntry).filter((e) => e !== null)
+    // Game-result texts need winner/loser names (JRNL-006); one cheap prefetch at family scale.
+    const profilesById = new Map(
+      (await app.pool.query('SELECT id, name, avatar FROM profiles')).rows.map((p) => [
+        p.id,
+        { name: p.name, avatar: p.avatar },
+      ]),
+    )
+    const entries = rows.map((r) => renderJournalEntry(r, profilesById)).filter((e) => e !== null)
     const nextBefore = rows.length === Number(q.limit) ? Number(rows[rows.length - 1].seq) : null
     return { entries, next_before: nextBefore }
   })
