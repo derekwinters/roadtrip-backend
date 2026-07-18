@@ -9,7 +9,8 @@ export class AppError extends Error {
   }
 }
 
-export const unauthenticated = () => new AppError(401, 'unauthenticated', 'Unknown or missing profile')
+export const unauthenticated = (message = 'Unknown or missing profile') =>
+  new AppError(401, 'unauthenticated', message)
 export const parentRequired = () => new AppError(403, 'parent_required', 'This action requires a parent profile')
 export const notFound = (what = 'Resource') => new AppError(404, 'not_found', `${what} not found`)
 export const validation = (message: string) => new AppError(400, 'validation', message)

@@ -87,6 +87,11 @@ describe('first-run bootstrap', () => {
       })
       expect(res.statusCode).toBe(401)
       expect(res.json().error.code).toBe('unauthenticated')
+      // The refusal explains itself: profiles exist, sign in as a parent — never the
+      // generic missing-profile message that misleads first-run clients (PRO-008).
+      expect(res.json().error.message).toMatch(/profiles already exist/i)
+      expect(res.json().error.message).toMatch(/parent/i)
+      expect(res.json().error.message).not.toMatch(/unknown or missing/i)
     }))
 
   it('non-empty DB: kid header still gets 403 parent_required [PRO-008] [PRO-002] [PRO-005]', async () =>
