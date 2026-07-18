@@ -38,7 +38,11 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
         await client.query('BEGIN')
         await client.query('SELECT pg_advisory_xact_lock($1)', [BOOTSTRAP_LOCK_KEY])
         const { rows: count } = await client.query('SELECT COUNT(*)::int AS n FROM profiles')
-        if (count[0].n > 0) throw unauthenticated() // PRO-004 applies the moment one profile exists
+        // PRO-008: the refusal must say profiles exist — the generic missing-profile
+        // message sends first-run clients chasing their own identity handling.
+        if (count[0].n > 0) {
+          throw unauthenticated('Profiles already exist — sign in as a parent to add more')
+        }
         const body = createSchema.parse(req.body)
         if (body.role !== 'parent') throw validation('The first profile must have the parent role')
         const { rows } = await client.query(
