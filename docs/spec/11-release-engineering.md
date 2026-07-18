@@ -10,7 +10,7 @@ artifacts attach to GitHub releases only (product decision).
 |---------|----------|--------|
 | Every PR | `pr.yml` — lint, typecheck, unit+integration tests (Postgres service), spec validation, docker build | Docker image tarball + OpenAPI copy uploaded as **workflow artifacts** |
 | Push to `main` | `release-please.yml` — maintains the release PR | Release PR with version bump + changelog |
-| Push to `main` while a release PR is open | `rc.yml` | **Release candidate**: prerelease `v{next}-rc.{run}` with image tarball attached + GHCR image `ghcr.io/derekwinters/roadtrip-backend:v{next}-rc.{run}` |
+| Push to `main` while a release PR is open | `rc.yml` | **Release candidate**: prerelease on opaque git tag `rc-{run}` (deliberately not SemVer — invisible to release-please's version scan), titled `v{next}-rc.{run}`, with image tarball attached + GHCR image `ghcr.io/derekwinters/roadtrip-backend:v{next}-rc.{run}`; `rc-*` prereleases and tags are pruned when the final release publishes |
 | Release PR merged (release created) | `release.yml` | Final image tarball + `openapi.yaml` + compose bundles attached to the versioned GitHub release notes + GHCR images `:vX.Y.Z` and `:latest` |
 
 GHCR is GitHub's own registry, used so a home server can run the stack with **no checkout and
@@ -31,7 +31,7 @@ attached to the release notes. `versionName` comes from `version.txt` (release-p
 |----|-------------|--------|
 | REL-001 | Every PR build produces downloadable build artifacts (backend: docker image tarball; android: APKs). | manual |
 | REL-002 | release-please maintains version, tag, and CHANGELOG from conventional commits on `main` in both repos. | manual |
-| REL-003 | While a release PR is open, each `main` build publishes a release-candidate prerelease with artifacts attached. | manual |
+| REL-003 | While a release PR is open, each `main` build publishes a release-candidate prerelease with artifacts attached. Its git tag is the opaque `rc-{run}` — never SemVer, so release-please cannot parse it as a shipped version; the human-readable `v{next}-rc.{run}` appears only in the release title and artifact names. Final releases are the only SemVer tags, and stale `rc-*` prereleases (with their tags) are pruned when a final release publishes. | manual |
 | REL-004 | Creating a release attaches final build artifacts to the versioned release notes. | manual |
 | REL-005 | CI runs the spec validator; documentation drift fails the build. | manual |
 | REL-006 | The backend Docker image is reproducible from the tagged commit via `docker build` with no network access at runtime (build-time fetches only). | manual |
