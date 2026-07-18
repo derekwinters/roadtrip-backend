@@ -1,0 +1,31 @@
+name: roadtrip
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: roadtrip
+      POSTGRES_PASSWORD: roadtrip
+      POSTGRES_DB: roadtrip
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U roadtrip -d roadtrip']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    image: roadtrip-backend
+    environment:
+      DATABASE_URL: postgres://roadtrip:roadtrip@db:5432/roadtrip
+      PORT: '8080'
+    ports:
+      - '8080:8080'
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
