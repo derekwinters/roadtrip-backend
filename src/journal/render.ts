@@ -9,6 +9,8 @@ export const JOURNAL_EVENT_TYPES = new Set([
   'location.crossing.state',
   'trip.leg.arrived',
   'game.finished',
+  'trip.started',
+  'trip.ended',
 ])
 
 export type DeepLink =
@@ -16,10 +18,11 @@ export type DeepLink =
   | { kind: 'map_pin'; lat: number; lon: number }
   | { kind: 'checklist'; state_code: string }
   | { kind: 'leg_summary'; destination_id: string }
+  | { kind: 'trip_summary'; trip_id: string }
 
 export interface JournalEntry {
   seq: number
-  kind: 'post' | 'stop' | 'state_crossing' | 'leg_arrival' | 'game_result'
+  kind: 'post' | 'stop' | 'state_crossing' | 'leg_arrival' | 'game_result' | 'trip_start' | 'trip_end'
   ts: string
   actor?: { id: string; name: string; avatar: string; role: string }
   text: string
@@ -34,6 +37,8 @@ const KIND_BY_TYPE: Record<string, JournalEntry['kind']> = {
   'location.crossing.state': 'state_crossing',
   'trip.leg.arrived': 'leg_arrival',
   'game.finished': 'game_result',
+  'trip.started': 'trip_start',
+  'trip.ended': 'trip_end',
 }
 
 function toIso(ts: unknown): string {
@@ -81,6 +86,17 @@ export function renderJournalEntry(row: any, profilesById?: ProfileNames): Journ
       const miles = Math.round(Number(s.miles ?? 0))
       entry.text = `Arrived at ${payload.destination_name}. ${wallH} h in the car (${movingH} h driving), ${miles} mi, ${s.stop_count} stops.`
       entry.link = { kind: 'leg_summary', destination_id: payload.destination_id }
+      break
+    }
+    case 'trip_start':
+      // TRIP-009 — lifecycle entries deep-link to the trip's own summary.
+      entry.text = `Road trip started: ${payload.name}`
+      entry.link = { kind: 'trip_summary', trip_id: payload.trip_id }
+      break
+    case 'trip_end': {
+      const miles = Math.round(Number(payload.miles ?? 0)).toLocaleString('en-US')
+      entry.text = `Road trip complete — ${miles} mi, ${Number(payload.states_count ?? 0)} states`
+      entry.link = { kind: 'trip_summary', trip_id: payload.trip_id }
       break
     }
     case 'game_result': {

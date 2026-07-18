@@ -4,6 +4,8 @@ name: Release
 #  - every push to main runs release-please (REL-002)
 #  - while a release PR is open, publish an RC prerelease with artifacts (REL-003)
 #  - when the release PR merges and the release is created, attach final artifacts (REL-004)
+#  - RC and final builds also push the image to GHCR so docker-compose.release.yml
+#    can run the stack pull-only, no checkout or local build (REL-007/REL-008)
 
 on:
   push:
@@ -12,6 +14,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  packages: write
 
 jobs:
   release-please:
@@ -52,6 +55,21 @@ jobs:
         run: |
           docker save roadtrip-backend:${{ steps.version.outputs.version }} | gzip > roadtrip-backend-image-${{ steps.version.outputs.version }}.tar.gz
           cp docs/spec/openapi.yaml openapi-${{ steps.version.outputs.version }}.yaml
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push image to GHCR (REL-007)
+        run: |
+          IMAGE=ghcr.io/${{ github.repository }}
+          docker tag roadtrip-backend:${{ steps.version.outputs.version }} "$IMAGE:${{ steps.version.outputs.version }}"
+          docker push "$IMAGE:${{ steps.version.outputs.version }}"
+          if [ "${{ steps.version.outputs.kind }}" = "final" ]; then
+            docker tag roadtrip-backend:${{ steps.version.outputs.version }} "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          fi
       - name: Publish release candidate (prerelease)
         if: steps.version.outputs.kind == 'rc'
         run: |
@@ -60,14 +78,16 @@ jobs:
             --prerelease \
             --target "${{ github.sha }}" \
             --title "Release candidate ${{ steps.version.outputs.version }}" \
-            --notes "Automated release candidate built from \`main\` @ ${{ github.sha }} while the release PR is open." \
+            --notes "Automated release candidate built from \`main\` @ ${{ github.sha }} while the release PR is open. Image: \`ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}\`" \
             roadtrip-backend-image-${{ steps.version.outputs.version }}.tar.gz \
             openapi-${{ steps.version.outputs.version }}.yaml \
-            docker-compose.yml
+            docker-compose.yml \
+            docker-compose.release.yml
       - name: Attach final artifacts to release notes
         if: steps.version.outputs.kind == 'final'
         run: |
           gh release upload "${{ steps.version.outputs.version }}" \
             roadtrip-backend-image-${{ steps.version.outputs.version }}.tar.gz \
             openapi-${{ steps.version.outputs.version }}.yaml \
-            docker-compose.yml
+            docker-compose.yml \
+            docker-compose.release.yml

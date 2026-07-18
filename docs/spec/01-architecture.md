@@ -25,7 +25,7 @@ read model over them, or both (see `02-event-model.md`).
 | Server (location engine) | `location.stop.started/ended`, `location.crossing.state/city`, `trip.leg.arrived` |
 | Any profile | `journal.post` |
 | Game endpoints | `game.created/joined/move/finished/abandoned` |
-| Parent admin | `destination.*`, `config.updated`, `profile.*` |
+| Parent admin | `destination.*`, `config.updated`, `profile.*`, `trip.started/ended` |
 
 | Read model | Source |
 |-----------|--------|

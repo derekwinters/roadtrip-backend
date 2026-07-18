@@ -16,18 +16,28 @@ const createSchema = z
 
 const updateSchema = createSchema.partial()
 
-/** Keeps exactly one active destination: the lowest-ordered non-arrived one. */
+/**
+ * Keeps exactly one active destination: the lowest-ordered non-arrived one belonging to
+ * the currently active trip — or to no trip when none is active, so the tracker still
+ * works between trips (TRIP-005/010). Identical to the pre-trips rule when no trips exist.
+ */
 export async function reconcileActiveDestination(db: Db): Promise<void> {
   await db.query(`UPDATE destinations SET status = 'pending' WHERE status = 'active'`)
   await db.query(
     `UPDATE destinations SET status = 'active'
-     WHERE id = (SELECT id FROM destinations WHERE status <> 'arrived' ORDER BY order_index, created_at LIMIT 1)`,
+     WHERE id = (SELECT id FROM destinations
+                 WHERE status <> 'arrived'
+                   AND trip_id IS NOT DISTINCT FROM (SELECT id FROM trips WHERE status = 'active' LIMIT 1)
+                 ORDER BY order_index, created_at LIMIT 1)`,
   )
 }
 
+/** Destinations of the active trip, or the unassociated pool between trips (TRIP-005). */
 async function listDestinations(db: Db) {
   const { rows } = await db.query(
-    'SELECT id, name, lat, lon, order_index, status, arrived_at FROM destinations ORDER BY order_index, created_at',
+    `SELECT id, name, lat, lon, order_index, status, arrived_at FROM destinations
+     WHERE trip_id IS NOT DISTINCT FROM (SELECT id FROM trips WHERE status = 'active' LIMIT 1)
+     ORDER BY order_index, created_at`,
   )
   return rows
 }
@@ -39,9 +49,18 @@ export async function destinationRoutes(app: FastifyInstance): Promise<void> {
     const body = createSchema.parse(req.body)
     const orderIndex =
       body.order_index ??
-      Number((await app.pool.query('SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM destinations')).rows[0].next)
+      Number(
+        (
+          await app.pool.query(
+            `SELECT COALESCE(MAX(order_index), -1) + 1 AS next FROM destinations
+             WHERE trip_id IS NOT DISTINCT FROM (SELECT id FROM trips WHERE status = 'active' LIMIT 1)`,
+          )
+        ).rows[0].next,
+      )
+    // TRIP-005: the destination belongs to the trip active at its creation (or none).
     const { rows } = await app.pool.query(
-      `INSERT INTO destinations (name, lat, lon, order_index) VALUES ($1, $2, $3, $4)
+      `INSERT INTO destinations (name, lat, lon, order_index, trip_id)
+       VALUES ($1, $2, $3, $4, (SELECT id FROM trips WHERE status = 'active' LIMIT 1))
        RETURNING id, name, lat, lon, order_index, status, arrived_at`,
       [body.name, body.lat, body.lon, orderIndex],
     )

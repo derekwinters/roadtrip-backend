@@ -12,6 +12,7 @@
 | `payload` | JSONB | Type-specific body (schemas below are normative). |
 | `client_ts` | TIMESTAMPTZ | When it happened (client clock; backdated for derived stops). |
 | `server_ts` | TIMESTAMPTZ | When the server persisted it. |
+| `trip_id` | UUID NULL | Trip whose `[started_at, ended_at)` window contains `client_ts`, resolved at insert (TRIP-004); NULL when no trip window matches. |
 
 ## Event type catalog
 
@@ -31,6 +32,8 @@ Server-derived (never accepted from clients):
 | `location.crossing.state` | `{state, state_code, prev_state_code?}` |
 | `location.crossing.city` | `{city, state_code}` |
 | `trip.leg.arrived` | `{destination_id, destination_name, summary: LegSummary}` |
+| `trip.started` | `{trip_id, name}` — `client_ts` = the trip's `started_at` |
+| `trip.ended` | `{trip_id, name, miles, states_count}` — `client_ts` = the trip's `ended_at`; totals frozen for the journal (TRIP-009) |
 | `game.created` | `{game_id, game_type, mode: "open"\|"challenge", invited_profile_id?, options}` |
 | `game.joined` | `{game_id, profile_id}` |
 | `game.move` | `{game_id, move_no, move}` (move shape is game-specific, see 08) |
@@ -40,8 +43,9 @@ Server-derived (never accepted from clients):
 | `config.updated` | `{changes: {key: value}}` |
 | `profile.created` / `profile.updated` | `{profile_id, name, avatar, role}` |
 
-Game events are recorded by the game endpoints (online-only actions); `location.*`,
-`trip.*` are emitted by the location engine while processing pings.
+Game events are recorded by the game endpoints (online-only actions); `location.*` and
+`trip.leg.arrived` are emitted by the location engine while processing pings;
+`trip.started` / `trip.ended` are recorded by the trip lifecycle endpoints (TRIP-001/002).
 
 ## Requirements
 

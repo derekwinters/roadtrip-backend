@@ -9,6 +9,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
+import { appendEvent } from '../src/events/store.js'
 
 type Inject = (opts: {
   method: string
@@ -61,6 +62,27 @@ export async function seedDemo(app: FastifyInstance): Promise<void> {
   const ids = Object.fromEntries(rows.map((r: any) => [r.name, r.id])) as Record<string, string>
   const [dad, mom, sam, alex] = [ids.Dad!, ids.Mom!, ids.Sam!, ids.Alex!]
 
+  // ---- one active trip wrapping the fabricated day (TRIP-011) -----------------
+  // The day's events are backdated, so the trip is inserted directly with a start
+  // before them (the API always starts trips "now"); the lifecycle event goes through
+  // the normal append path and lands inside its own window.
+  const day = new Date()
+  day.setHours(8, 0, 0, 0)
+  // Start an hour before both the fabricated day and "now", so backdated pings/posts
+  // and live-created games all fall inside the trip window whatever the local time is.
+  const tripStart = new Date(Math.min(day.getTime(), Date.now()) - 60 * 60_000)
+  const tripName = 'Summer Road Trip'
+  const { rows: tripRows } = await app.pool.query(
+    `INSERT INTO trips (name, status, started_at) VALUES ($1, 'active', $2) RETURNING id`,
+    [tripName, tripStart],
+  )
+  await appendEvent(app.pool, {
+    type: 'trip.started',
+    actorId: dad,
+    payload: { trip_id: tripRows[0].id, name: tripName },
+    clientTs: tripStart,
+  })
+
   // ---- destinations (Denver -> Cheyenne day) ---------------------------------
   await must(
     await inject({
@@ -82,8 +104,6 @@ export async function seedDemo(app: FastifyInstance): Promise<void> {
   )
 
   // ---- the drive: I-25 Denver -> Cheyenne with a lunch stop in Fort Collins ---
-  const day = new Date()
-  day.setHours(8, 0, 0, 0)
   const leg1 = pingsAlong(
     [
       [39.7392, -104.9903], // Denver
@@ -250,7 +270,11 @@ export async function seedDemo(app: FastifyInstance): Promise<void> {
     )
   }
 
-  console.log('Demo trip seeded: 4 profiles, 2 destinations, %d pings, %d posts, 3 games.', allPings.length, posts.length)
+  console.log(
+    'Demo trip seeded: 4 profiles, 1 active trip, 2 destinations, %d pings, %d posts, 3 games.',
+    allPings.length,
+    posts.length,
+  )
 }
 
 // CLI entry

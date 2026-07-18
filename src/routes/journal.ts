@@ -3,19 +3,28 @@ import { z } from 'zod'
 import { requireProfile } from '../auth.js'
 import { appendEvent } from '../events/store.js'
 import { JOURNAL_EVENT_TYPES, renderJournalEntry } from '../journal/render.js'
+import { resolveTripScope } from '../trips/scope.js'
 
 const querySchema = z.object({
   before: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(200).default(50),
+  trip: z.string().uuid().optional(),
 })
 
 const postSchema = z.object({ text: z.string().trim().min(1).max(2000) }).strict()
 
 export async function journalRoutes(app: FastifyInstance): Promise<void> {
-  // JRNL-001/002/004/005 — newest-first feed over journal-worthy events, ordered by client_ts.
+  // JRNL-001/002/004/005 — newest-first feed over journal-worthy events, ordered by
+  // client_ts, scoped to the trip in scope (TRIP-007; unscoped when no trips exist).
   app.get('/api/journal', { preHandler: [requireProfile] }, async (req) => {
     const q = querySchema.parse(req.query)
+    const scope = await resolveTripScope(app.pool, q.trip)
     const args: unknown[] = [Array.from(JOURNAL_EVENT_TYPES)]
+    let scopeClause = ''
+    if (scope !== null) {
+      args.push(scope)
+      scopeClause = `AND e.trip_id = $${args.length}` // NULL-trip events excluded (TRIP-010)
+    }
     let cursorClause = ''
     if (q.before) {
       args.push(q.before)
@@ -25,7 +34,7 @@ export async function journalRoutes(app: FastifyInstance): Promise<void> {
     const { rows } = await app.pool.query(
       `SELECT e.*, p.id AS p_id, p.name AS p_name, p.avatar AS p_avatar, p.role AS p_role
        FROM events e LEFT JOIN profiles p ON p.id = e.actor_id
-       WHERE e.type = ANY($1) ${cursorClause}
+       WHERE e.type = ANY($1) ${scopeClause} ${cursorClause}
        ORDER BY e.client_ts DESC, e.seq DESC
        LIMIT $${args.length}`,
       args,

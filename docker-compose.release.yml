@@ -1,0 +1,36 @@
+# Pull-only deployment (REL-008): every service references a published image — no repo
+# checkout, no local build. Grab this file from the release notes and run:
+#
+#   docker compose -f docker-compose.release.yml up -d
+#
+# Pin the API to a specific release by replacing `latest` with a version tag (e.g. v1.2.0).
+name: roadtrip
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: roadtrip
+      POSTGRES_PASSWORD: roadtrip
+      POSTGRES_DB: roadtrip
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U roadtrip -d roadtrip']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: ghcr.io/derekwinters/roadtrip-backend:latest
+    environment:
+      DATABASE_URL: postgres://roadtrip:roadtrip@db:5432/roadtrip
+      PORT: '8080'
+    ports:
+      - '8080:8080'
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
