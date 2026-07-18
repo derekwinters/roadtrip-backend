@@ -52,7 +52,7 @@ jobs:
                 gh release delete "$tag" --cleanup-tag --yes
               done
       - id: rp
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           release-type: node
 
@@ -63,7 +63,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Determine version
         id: version
         # `version` is the human-readable name used in release titles, artifact
@@ -88,7 +88,7 @@ jobs:
           docker save roadtrip-backend:${{ steps.version.outputs.version }} | gzip > roadtrip-backend-image-${{ steps.version.outputs.version }}.tar.gz
           cp docs/spec/openapi.yaml openapi-${{ steps.version.outputs.version }}.yaml
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
