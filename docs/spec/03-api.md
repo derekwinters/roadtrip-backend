@@ -7,10 +7,12 @@ contract follows.
 
 - Base path `/api`; JSON everywhere; UTC ISO-8601 timestamps.
 - Identity: `X-Profile-Id: <uuid>` header (see 04). `GET /api/profiles` and `GET /api/health`
-  are the only unauthenticated routes.
+  are the only unauthenticated routes (plus `POST /api/profiles` only while zero profiles
+  exist — the first-run bootstrap, PRO-008).
 - Errors: `{ "error": { "code": string, "message": string } }` with proper status codes.
   Stable machine codes: `unauthenticated`, `parent_required`, `not_found`, `validation`,
-  `not_your_turn`, `illegal_move`, `game_full`, `not_invited`, `conflict`.
+  `not_your_turn`, `illegal_move`, `game_full`, `not_invited`, `conflict`,
+  `geocode_unavailable`.
 - Cursors: event feeds use the event `seq` as an exclusive `after` cursor; the journal uses
   `before` for backward pagination. Long-poll via `wait=<1..30>` seconds.
 - Idempotency: client-generated UUID `event_id` on every synced event (EVT-001).
@@ -21,7 +23,7 @@ contract follows.
 |---------------|---------|------|
 | GET `/api/health` | liveness/connectivity probe | none |
 | GET `/api/profiles` | login screen list | none |
-| POST `/api/profiles` | create profile | parent |
+| POST `/api/profiles` | create profile | parent (none while zero profiles exist, PRO-008) |
 | PATCH `/api/profiles/{id}` | update profile | parent |
 | GET `/api/config` / PUT `/api/config` | read / update tunables | any / parent |
 | GET `/api/destinations` | ordered destination list | any |
@@ -48,6 +50,7 @@ contract follows.
 | GET `/api/games/{id}` | current state (engine view) | any |
 | GET `/api/games/{id}/events` | move stream (replay/spectate, long-poll) | any |
 | GET `/api/notifications` | per-profile notification feed (long-poll) | any |
+| GET `/api/geocode` | address search proxy (cached, throttled, best-effort online) | parent |
 
 ## Requirements
 

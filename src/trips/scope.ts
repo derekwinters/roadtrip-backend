@@ -14,9 +14,12 @@ export interface TripWindow {
 
 const ms = (v: Date | string): number => (v instanceof Date ? v.getTime() : Date.parse(v))
 
-/** Loads every trip window; the engine resolves epochs against this per batch (TRIP-006). */
+/**
+ * Loads every trip window; the engine resolves epochs against this per batch (TRIP-006).
+ * Planned trips have no window yet and are excluded (TRIP-013).
+ */
 export async function loadTripWindows(db: Db): Promise<TripWindow[]> {
-  const { rows } = await db.query('SELECT id, started_at, ended_at FROM trips')
+  const { rows } = await db.query('SELECT id, started_at, ended_at FROM trips WHERE started_at IS NOT NULL')
   return rows.map((r: any) => ({
     id: r.id,
     startedAtMs: ms(r.started_at),
@@ -40,8 +43,9 @@ export async function activeTripId(db: Db): Promise<string | null> {
 
 /**
  * Read-model scope (TRIP-007): an explicit ?trip=<id> wins (404 on unknown ids);
- * otherwise the active trip, else the most recently ended one. Returns null — legacy
- * unscoped behavior — only when no trips exist at all.
+ * otherwise the active trip, else the most recently ended one. Planned trips are never
+ * a default scope (TRIP-013) — with only a planned trip around, reads stay unscoped.
+ * Returns null — legacy unscoped behavior — when no started trip exists at all.
  */
 export async function resolveTripScope(db: Db, tripParam?: string): Promise<string | null> {
   if (tripParam) {
@@ -51,6 +55,7 @@ export async function resolveTripScope(db: Db, tripParam?: string): Promise<stri
   }
   const { rows } = await db.query(
     `SELECT id FROM trips
+     WHERE status <> 'planned'
      ORDER BY (status = 'active') DESC, ended_at DESC NULLS LAST, started_at DESC
      LIMIT 1`,
   )

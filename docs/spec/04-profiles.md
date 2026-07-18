@@ -5,6 +5,16 @@ passwords (product decision). Every subsequent request carries `X-Profile-Id: <u
 
 Each profile has a **role**: `parent` or `kid` — an attribute, never hardcoded names.
 
+## First-run bootstrap
+
+A fresh install has zero profiles, so nobody can authenticate and PRO-002 would deadlock
+setup. While the profiles table is **empty**, `POST /api/profiles` is therefore allowed
+without authentication — but only to create a **parent** (a kid-first install would deadlock
+the same way). The moment one profile exists, the parent-only rule applies again. The
+emptiness check is race-safe: concurrent first-creates produce exactly one bootstrap profile.
+The bootstrap `profile.created` event is recorded with a null actor (there is nobody to
+attribute it to).
+
 ## Permissions matrix
 
 | Action | Kid | Parent |
@@ -28,3 +38,4 @@ Each profile has a **role**: `parent` or `kid` — an attribute, never hardcoded
 | PRO-005 | Parent-only routes (destinations write, config write, profile write) return 403 for kid profiles, with a machine-readable `error.code = "parent_required"`. | auto |
 | PRO-006 | Kids' journal posts publish instantly — there is no moderation queue or pending state anywhere in the pipeline. | auto |
 | PRO-007 | Profile create/update emits `profile.created` / `profile.updated` events. | auto |
+| PRO-008 | When zero profiles exist, `POST /api/profiles` is permitted without authentication and the created profile must have the parent role (400 `validation` otherwise); the moment one profile exists the parent-only rule (PRO-002) applies unchanged (401/403). The first-create check is race-safe: concurrent bootstrap attempts yield exactly one profile. | auto |

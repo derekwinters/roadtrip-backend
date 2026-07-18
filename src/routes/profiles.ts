@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { requireParent } from '../auth.js'
 import { appendEvent } from '../events/store.js'
-import { notFound } from '../errors.js'
+import { notFound, parentRequired, unauthenticated, validation } from '../errors.js'
 
 const createSchema = z
   .object({
@@ -14,6 +14,9 @@ const createSchema = z
 
 const updateSchema = createSchema.partial()
 
+/** Serializes first-run bootstrap creates so exactly one can win the race (PRO-008). */
+const BOOTSTRAP_LOCK_KEY = 0x70726f66 // "prof"
+
 export async function profileRoutes(app: FastifyInstance): Promise<void> {
   // PRO-001 — unauthenticated: this is the login screen datasource.
   app.get('/api/profiles', async () => {
@@ -23,8 +26,44 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
     return rows
   })
 
-  // PRO-002 / PRO-007
-  app.post('/api/profiles', { preHandler: [requireParent] }, async (req, reply) => {
+  // PRO-002 / PRO-007, plus the PRO-008 first-run bootstrap when unauthenticated.
+  app.post('/api/profiles', async (req, reply) => {
+    // PRO-008 — with no authenticated profile, creation is allowed only while the
+    // profiles table is empty, and only for a parent. The emptiness check and the
+    // insert share one transaction serialized by an advisory lock, so concurrent
+    // bootstrap attempts cannot both observe an empty table (race-safe first create).
+    if (!req.profile) {
+      const client = await app.pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query('SELECT pg_advisory_xact_lock($1)', [BOOTSTRAP_LOCK_KEY])
+        const { rows: count } = await client.query('SELECT COUNT(*)::int AS n FROM profiles')
+        if (count[0].n > 0) throw unauthenticated() // PRO-004 applies the moment one profile exists
+        const body = createSchema.parse(req.body)
+        if (body.role !== 'parent') throw validation('The first profile must have the parent role')
+        const { rows } = await client.query(
+          'INSERT INTO profiles (name, avatar, role) VALUES ($1, $2, $3) RETURNING id, name, avatar, role',
+          [body.name, body.avatar, body.role],
+        )
+        const profile = rows[0]
+        await appendEvent(client, {
+          type: 'profile.created',
+          actorId: null, // nobody to attribute the bootstrap to (PRO-008)
+          payload: { profile_id: profile.id, name: profile.name, avatar: profile.avatar, role: profile.role },
+          clientTs: new Date(),
+        })
+        await client.query('COMMIT')
+        app.bus.notify()
+        return reply.status(201).send(profile)
+      } catch (err) {
+        await client.query('ROLLBACK')
+        throw err
+      } finally {
+        client.release()
+      }
+    }
+
+    if (req.profile.role !== 'parent') throw parentRequired() // PRO-002/005, as before
     const body = createSchema.parse(req.body)
     const { rows } = await app.pool.query(
       'INSERT INTO profiles (name, avatar, role) VALUES ($1, $2, $3) RETURNING id, name, avatar, role',
@@ -33,7 +72,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
     const profile = rows[0]
     await appendEvent(app.pool, {
       type: 'profile.created',
-      actorId: req.profile!.id,
+      actorId: req.profile.id,
       payload: { profile_id: profile.id, name: profile.name, avatar: profile.avatar, role: profile.role },
       clientTs: new Date(),
     })

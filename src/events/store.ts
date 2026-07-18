@@ -31,7 +31,8 @@ export type AppendResult = { status: 'inserted'; seq: number } | { status: 'dupl
  *
  * TRIP-004: the event's trip_id is resolved at insert time as the trip whose
  * [started_at, ended_at) window contains client_ts — so offline events flushed after a
- * trip ended still land in the right trip; NULL when no window matches.
+ * trip ended still land in the right trip; NULL when no window matches. Planned trips
+ * have no window (started_at NULL) and are excluded outright (TRIP-013).
  */
 export async function appendEvent(db: Db, input: AppendInput): Promise<AppendResult> {
   const eventId = input.eventId ?? randomUUID()
@@ -39,7 +40,8 @@ export async function appendEvent(db: Db, input: AppendInput): Promise<AppendRes
     `INSERT INTO events (event_id, type, actor_id, device_id, payload, client_ts, trip_id)
      VALUES ($1, $2, $3, $4, $5, $6,
              (SELECT id FROM trips
-              WHERE started_at <= $6::timestamptz AND (ended_at IS NULL OR ended_at > $6::timestamptz)
+              WHERE status <> 'planned'
+                AND started_at <= $6::timestamptz AND (ended_at IS NULL OR ended_at > $6::timestamptz)
               ORDER BY started_at DESC LIMIT 1))
      ON CONFLICT (event_id) DO NOTHING
      RETURNING seq`,

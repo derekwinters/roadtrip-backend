@@ -1,0 +1,163 @@
+/**
+ * Address search proxy (docs/spec/13-geocode-search.md, GSR-001..005).
+ *
+ * Forward geocoding for destination planning — the single, explicitly best-effort
+ * ONLINE component of the system (SYS-007 clarification in the spec). Results are
+ * cached forever in geocode_cache keyed by the normalized query, so repeat searches
+ * work offline and across restarts (GSR-003); upstream calls are throttled to
+ * Nominatim's one-request-per-second policy (GSR-005); the upstream fetcher is
+ * injectable so tests never call the real service.
+ */
+import type { Db } from '../db.js'
+import { AppError } from '../errors.js'
+
+export interface GeocodeMatch {
+  display_name: string
+  lat: number
+  lon: number
+}
+
+export type UpstreamFetcher = (query: string) => Promise<GeocodeMatch[]>
+
+export const MAX_MATCHES = 5
+export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
+export const USER_AGENT = 'roadtrip-backend (self-hosted family app)'
+const DEFAULT_MIN_SPACING_MS = 1100 // just over Nominatim's absolute max of 1 req/s (GSR-005)
+const DEFAULT_TIMEOUT_MS = 5000
+
+const geocodeUnavailable = () =>
+  new AppError(503, 'geocode_unavailable', 'Address search is unavailable (upstream unreachable and query not cached)')
+
+/**
+ * Serializes tasks with >= minSpacingMs between successive task STARTS (GSR-005).
+ * Tasks run strictly one at a time; a rejected task neither wedges the queue nor
+ * resets the spacing. Clock and sleep are injectable for deterministic tests.
+ */
+export class ThrottleQueue {
+  private chain: Promise<unknown> = Promise.resolve()
+  private lastStart: number | null = null
+
+  constructor(
+    private readonly minSpacingMs: number,
+    private readonly now: () => number = Date.now,
+    private readonly sleep: (ms: number) => Promise<void> = (ms) =>
+      new Promise((resolve) => setTimeout(resolve, ms)),
+  ) {}
+
+  run<T>(fn: () => Promise<T>): Promise<T> {
+    const task = this.chain.then(async () => {
+      if (this.lastStart !== null) {
+        const wait = this.lastStart + this.minSpacingMs - this.now()
+        if (wait > 0) await this.sleep(wait)
+      }
+      this.lastStart = this.now()
+      return fn()
+    })
+    this.chain = task.catch(() => undefined) // keep the chain alive past failures
+    return task
+  }
+}
+
+export interface NominatimOptions {
+  baseUrl?: string
+  userAgent?: string
+  timeoutMs?: number
+  /** Injectable for tests — the suite never calls the real Nominatim. */
+  fetchImpl?: typeof fetch
+}
+
+interface NominatimRow {
+  display_name?: unknown
+  lat?: unknown
+  lon?: unknown
+}
+
+/**
+ * Default upstream: Nominatim search with format=jsonv2, limit 5, and the descriptive
+ * User-Agent the usage policy requires (GSR-002). Rows are reduced to numeric
+ * {display_name, lat, lon} matches.
+ */
+export function nominatimFetcher(opts: NominatimOptions = {}): UpstreamFetcher {
+  const baseUrl = opts.baseUrl ?? NOMINATIM_URL
+  const userAgent = opts.userAgent ?? USER_AGENT
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const fetchImpl = opts.fetchImpl ?? fetch
+  return async (query) => {
+    const url = new URL(baseUrl)
+    url.searchParams.set('q', query)
+    url.searchParams.set('format', 'jsonv2')
+    url.searchParams.set('limit', String(MAX_MATCHES))
+    const res = await fetchImpl(url, {
+      headers: { 'User-Agent': userAgent },
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!res.ok) throw new Error(`Nominatim responded ${res.status}`)
+    const rows = (await res.json()) as NominatimRow[]
+    if (!Array.isArray(rows)) throw new Error('Nominatim returned a non-array response')
+    return rows.slice(0, MAX_MATCHES).map((row) => ({
+      display_name: String(row.display_name ?? ''),
+      lat: Number(row.lat),
+      lon: Number(row.lon),
+    }))
+  }
+}
+
+export interface GeocodeSearchOptions {
+  /** Upstream fetcher; tests inject a stub (default: real Nominatim, GSR-002). */
+  fetcher?: UpstreamFetcher
+  /** Minimum ms between upstream call starts (default 1100, GSR-005). */
+  minSpacingMs?: number
+}
+
+/** Cache key normalization: trimmed, whitespace-collapsed, lower-cased (GSR-003). */
+export function normalizeQuery(q: string): string {
+  return q.trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+export class GeocodeSearch {
+  private readonly fetcher: UpstreamFetcher
+  private readonly queue: ThrottleQueue
+  /** Concurrent identical queries share one upstream call (GSR-003/005). */
+  private readonly inflight = new Map<string, Promise<GeocodeMatch[]>>()
+
+  constructor(
+    private readonly db: Db,
+    opts: GeocodeSearchOptions = {},
+  ) {
+    this.fetcher = opts.fetcher ?? nominatimFetcher()
+    this.queue = new ThrottleQueue(opts.minSpacingMs ?? DEFAULT_MIN_SPACING_MS)
+  }
+
+  async search(rawQuery: string): Promise<GeocodeMatch[]> {
+    const query = normalizeQuery(rawQuery)
+    const cached = await this.readCache(query) // GSR-003: cache first, upstream never re-hit
+    if (cached) return cached
+    const existing = this.inflight.get(query)
+    if (existing) return existing
+    const pending = this.queue
+      .run(() => this.fetchAndCache(query))
+      .finally(() => this.inflight.delete(query))
+    this.inflight.set(query, pending)
+    return pending
+  }
+
+  private async readCache(query: string): Promise<GeocodeMatch[] | null> {
+    const { rows } = await this.db.query('SELECT results FROM geocode_cache WHERE query = $1', [query])
+    return rows.length === 1 ? (rows[0].results as GeocodeMatch[]) : null
+  }
+
+  private async fetchAndCache(query: string): Promise<GeocodeMatch[]> {
+    let matches: GeocodeMatch[]
+    try {
+      matches = (await this.fetcher(query)).slice(0, MAX_MATCHES)
+    } catch {
+      throw geocodeUnavailable() // GSR-004: fail cleanly, never cache a failure
+    }
+    await this.db.query(
+      `INSERT INTO geocode_cache (query, results, fetched_at) VALUES ($1, $2, now())
+       ON CONFLICT (query) DO UPDATE SET results = EXCLUDED.results, fetched_at = now()`,
+      [query, JSON.stringify(matches)],
+    )
+    return matches
+  }
+}

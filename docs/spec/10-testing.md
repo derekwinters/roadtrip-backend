@@ -40,7 +40,7 @@ at least one test (enforced by `npm run validate:specs`, which fails CI otherwis
 | SIM-004 | The `state_crossing` scenario produces the expected `location.crossing.state` sequence and checklist entries. | auto |
 | SIM-005 | The `arrival` scenario triggers arrival detection and a leg summary whose miles/wall/moving/stops figures match the scenario's reference values. | auto |
 | SIM-006 | The `traffic_jam` scenario registers a stop (accepted quirk, documented in 06) — the assertion pins the documented behavior. | auto |
-| SIM-007 | `npm run seed:demo` populates a fabricated full day — pings, stops, crossings, several finished games, manual posts, a leg summary — leaving every read endpoint non-empty (used for UI development). | auto |
+| SIM-007 | `npm run seed:demo` populates a fabricated full day — pings, stops, crossings, several finished games, manual posts, a leg summary, a partially filled bingo card (BNG-006) — leaving every read endpoint non-empty (used for UI development). | auto |
 | SIM-008 | A scripted multi-client game test: two clients play a full chess game through the API while a third long-polls the spectate stream and observes every move in order (validates GAME-009 at scenario level). | auto |
 
 ## Documentation validation (`npm run validate:specs`)

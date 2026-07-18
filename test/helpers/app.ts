@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { buildApp } from '../../src/app.js'
+import { buildApp, type BuildOptions } from '../../src/app.js'
 import { createTestDb, type TestDb } from './db.js'
 
 export interface TestApp {
@@ -10,9 +10,14 @@ export interface TestApp {
   close: () => Promise<void>
 }
 
-export async function createTestApp(): Promise<TestApp> {
+export interface TestAppOptions {
+  /** Geocode proxy injection — tests always stub the upstream (GSR-002/005). */
+  geocode?: BuildOptions['geocode']
+}
+
+export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp> {
   const db = await createTestDb()
-  const app = await buildApp({ pool: db.pool })
+  const app = await buildApp({ pool: db.pool, geocode: opts.geocode })
 
   return {
     app,

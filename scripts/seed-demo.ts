@@ -1,8 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * Demo trip seed (SIM-007, docs/spec/10-testing.md): populates a full fabricated day —
- * pings with stops and a state crossing, several finished games, manual journal posts, and
- * a leg arrival — so every read endpoint has realistic data for UI development.
+ * pings with stops and a state crossing, several finished games, manual journal posts,
+ * a partially filled license-plate bingo card (BNG-006), and a leg arrival — so every
+ * read endpoint has realistic data for UI development.
  *
  * Drives the REAL API in-process (app.inject); no HTTP server needed.
  *   npx tsx scripts/seed-demo.ts            # uses DATABASE_URL
@@ -193,6 +194,37 @@ export async function seedDemo(app: FastifyInstance): Promise<void> {
     )
   }
 
+  // ---- license plate bingo (BNG-006): partially filled card with one removal ---
+  const plates: Array<[string, 'plate.spotted' | 'plate.unspotted', string, number]> = [
+    [sam, 'plate.spotted', 'CO', 20],
+    [alex, 'plate.spotted', 'TX', 95],
+    [sam, 'plate.spotted', 'NE', 170],
+    [alex, 'plate.spotted', 'WY', 345],
+    // Sam withdraws his own doubtful Nebraska sighting (honored: original spotter).
+    [sam, 'plate.unspotted', 'NE', 380],
+  ]
+  for (const [who, type, code, minAfterStart] of plates) {
+    await must(
+      await inject({
+        method: 'POST',
+        url: '/api/sync/batch',
+        headers: as(who),
+        payload: {
+          device_id: `${who.slice(0, 8)}-tablet`,
+          events: [
+            {
+              event_id: randomUUID(),
+              type,
+              client_ts: new Date(day.getTime() + minAfterStart * 60_000).toISOString(),
+              payload: { state_code: code },
+            },
+          ],
+        },
+      }),
+      `plate ${type} ${code}`,
+    )
+  }
+
   // ---- games ------------------------------------------------------------------
   // Tic-tac-toe: Sam challenges Alex and wins.
   const ttt = await must(
@@ -271,9 +303,10 @@ export async function seedDemo(app: FastifyInstance): Promise<void> {
   }
 
   console.log(
-    'Demo trip seeded: 4 profiles, 1 active trip, 2 destinations, %d pings, %d posts, 3 games.',
+    'Demo trip seeded: 4 profiles, 1 active trip, 2 destinations, %d pings, %d posts, %d plate events, 3 games.',
     allPings.length,
     posts.length,
+    plates.length,
   )
 }
 

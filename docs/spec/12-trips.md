@@ -10,10 +10,22 @@ Starting/ending/renaming trips is **parent-only**, consistent with the permissio
 
 ## Design
 
-- New `trips` read model: `id, name, status ('active'|'ended'), started_at, ended_at`;
-  at most **one active trip** at a time (enforced by a partial unique index). `trip.started` /
+- New `trips` read model: `id, name, status ('planned'|'active'|'ended'), started_at,
+  ended_at, planned_start_at`; at most **one active trip** at a time (enforced by a partial
+  unique index), and likewise at most **one planned trip** (TRIP-013). `trip.started` /
   `trip.ended` events are the system of record (append-only, like everything else). Renaming
   is a plain read-model update — the lifecycle events carry the name at start/end time.
+- **Planned trips** (TRIP-013..017): a parent can stage the next trip before the family
+  leaves. A planned trip is a provisional read-model row with `started_at` NULL, so it has
+  **no window**: the association rule, the engine's epoch resolution, and the default read
+  scope all ignore planned trips. `planned_start_at` is informational only — nothing
+  auto-activates (TRIP-016). Destinations are staged against it with `?trip=<plannedId>`
+  on the destination endpoints (TRIP-014); activation (`POST /api/trips/{id}/start`,
+  TRIP-015) flips the row to active with `started_at = now` and emits `trip.started` —
+  from that moment the trip behaves exactly like one started directly (TRIP-001), and the
+  staged destinations already form its list (they carry its `trip_id`; reconciliation marks
+  the first one active). Planning and deleting a planned trip (TRIP-017) emit no lifecycle
+  events, because a planned trip never entered the event stream.
 - **Association rule**: every event stores a nullable `trip_id`, resolved at insert time as
   the trip whose `[started_at, ended_at)` window contains the event's `client_ts`. This means
   offline events flushed *after* a trip ended still land in the right trip — the same
@@ -49,10 +61,16 @@ Starting/ending/renaming trips is **parent-only**, consistent with the permissio
 | TRIP-010 | Events whose `client_ts` falls outside every trip window remain accepted, stored, and readable in unscoped views, but are excluded from every trip-scoped view. | auto |
 | TRIP-011 | The simulator/seed tooling can populate multiple trips with distinct histories, and a scenario test proves per-trip isolation of journal/checklist/legs/summary. | auto |
 | TRIP-012 | Pre-trip dry run includes starting and ending a real trip from a parent device. | manual |
+| TRIP-013 | `POST /api/trips` accepts `status:"planned"` (plus optional `planned_start_at`, RFC3339): the trip is created without a window (`started_at` null) and never associates events nor becomes the default read scope; at most one planned trip may exist (409 `conflict` on a second). | auto |
+| TRIP-014 | Destination writes accept `?trip=<plannedId>` to stage a planned trip's list (parent-only as always): POST creates into the planned trip (404 unknown trip, 409 when the trip is not planned), PATCH and DELETE with `?trip=` require the destination to belong to that trip (404 otherwise); `GET /api/destinations?trip=<id>` lists that trip's destinations. | auto |
+| TRIP-015 | `POST /api/trips/{id}/start` activates a planned trip (parent-only): 409 when the trip is not planned or when another trip is active; sets status active with `started_at` = now and emits `trip.started`; the staged destinations become the active trip's list with the first one reconciled active. | auto |
+| TRIP-016 | `planned_start_at` is informational only — served by `GET /api/trips`, never auto-activating; while the trip is planned, `PATCH /api/trips/{id}` can update it alongside the name (409 when setting it on a non-planned trip). | auto |
+| TRIP-017 | `DELETE /api/trips/{id}` removes a planned trip together with its staged destinations (parent-only); deleting an active or ended trip is 409. | auto |
 
 ## Interactions with existing specs (updated in the implementing change)
 
-- `02-event-model.md`: `trip.started` / `trip.ended` in the catalog + the `trip_id` column.
+- `02-event-model.md`: `trip.started` / `trip.ended` in the catalog + the `trip_id` column
+  (planned trips have no window and never match, TRIP-013).
 - `06-location.md`: engine epoch reset (TRIP-006) refines LOC-006/LOC-009 leg numbering.
 - `07-journal.md`: two new journal-worthy kinds (TRIP-009); SUM-002 is trip-scoped
   (TRIP-007/008).

@@ -1,9 +1,20 @@
 import { z } from 'zod'
+import { PLATE_STATE_CODES } from '../bingo/states.js'
 
 /** Event payload schemas — the normative catalog is docs/spec/02-event-model.md (EVT-003). */
 
 const ts = z.string().datetime({ offset: true })
 const uuid = z.string().uuid()
+
+// BNG-001: a 2-letter uppercase code from the bundled states + DC; anything else rejects.
+const platePayload = z
+  .object({
+    state_code: z
+      .string()
+      .regex(/^[A-Z]{2}$/, 'state_code must be a 2-letter uppercase code')
+      .refine((c) => PLATE_STATE_CODES.has(c), { message: 'unknown state_code' }),
+  })
+  .strict()
 
 export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
   'location.ping': z
@@ -15,6 +26,8 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
     })
     .strict(),
   'journal.post': z.object({ text: z.string().trim().min(1).max(2000) }).strict(),
+  'plate.spotted': platePayload,
+  'plate.unspotted': platePayload,
 
   'location.stop.started': z.object({ stop_id: uuid, lat: z.number(), lon: z.number() }).strict(),
   'location.stop.ended': z
@@ -104,8 +117,8 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
     .strict(),
 }
 
-/** The only types clients may upload through sync (EVT-004). */
-export const CLIENT_EVENT_TYPES = new Set(['location.ping', 'journal.post'])
+/** The only types clients may upload through sync (EVT-004; plate.* per BNG-001). */
+export const CLIENT_EVENT_TYPES = new Set(['location.ping', 'journal.post', 'plate.spotted', 'plate.unspotted'])
 
 export function validateEventPayload(
   type: string,

@@ -51,5 +51,11 @@ describe('demo trip seed', () => {
 
     const notifications = (await get('/api/notifications')).json()
     expect(notifications.items.length).toBeGreaterThan(0)
+
+    // License plate bingo: a partially filled card with exactly one removal (covers: BNG-006).
+    const bingo = (await get('/api/bingo')).json()
+    expect(bingo.cells.length).toBeGreaterThanOrEqual(3)
+    expect(bingo.log.filter((l: any) => l.action === 'unspotted')).toHaveLength(1)
+    expect(Object.keys(bingo.counts).length).toBeGreaterThanOrEqual(2)
   })
 })
