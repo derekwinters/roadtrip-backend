@@ -1,0 +1,61 @@
+name: PR
+
+on:
+  pull_request:
+  push:
+    branches: ['claude/**']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: roadtrip
+          POSTGRES_PASSWORD: roadtrip
+          POSTGRES_DB: postgres
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U roadtrip"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_ADMIN_URL: postgres://roadtrip:roadtrip@127.0.0.1:5433/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Lint & typecheck
+        run: |
+          npm run lint
+          npm run typecheck
+      - name: Spec / documentation validation
+        run: npm run validate:specs
+      - name: Tests (unit + integration + scenario)
+        run: npm test
+
+  build-artifact:
+    # REL-001 — every PR build produces a downloadable artifact.
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t roadtrip-backend:${{ github.sha }} .
+      - name: Export image tarball
+        run: docker save roadtrip-backend:${{ github.sha }} | gzip > roadtrip-backend-image.tar.gz
+      - name: Bundle deploy files
+        run: |
+          mkdir -p bundle
+          cp roadtrip-backend-image.tar.gz docker-compose.yml docs/spec/openapi.yaml bundle/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roadtrip-backend-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+          path: bundle/
+          retention-days: 14

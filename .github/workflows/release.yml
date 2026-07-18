@@ -1,0 +1,73 @@
+name: Release
+
+# Release engineering per docs/spec/11-release-engineering.md:
+#  - every push to main runs release-please (REL-002)
+#  - while a release PR is open, publish an RC prerelease with artifacts (REL-003)
+#  - when the release PR merges and the release is created, attach final artifacts (REL-004)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      prs: ${{ steps.rp.outputs.prs }}
+      pr: ${{ steps.rp.outputs.pr }}
+    steps:
+      - id: rp
+        uses: googleapis/release-please-action@v4
+        with:
+          release-type: node
+
+  build:
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' || needs.release-please.outputs.pr }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ needs.release-please.outputs.release_created }}" = "true" ]; then
+            echo "kind=final" >> "$GITHUB_OUTPUT"
+            echo "version=${{ needs.release-please.outputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            NEXT=$(echo '${{ needs.release-please.outputs.pr }}' | jq -r '.title' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            echo "kind=rc" >> "$GITHUB_OUTPUT"
+            echo "version=v${NEXT}-rc.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build Docker image
+        run: docker build -t roadtrip-backend:${{ steps.version.outputs.version }} .
+      - name: Export artifacts
+        run: |
+          docker save roadtrip-backend:${{ steps.version.outputs.version }} | gzip > roadtrip-backend-image-${{ steps.version.outputs.version }}.tar.gz
+          cp docs/spec/openapi.yaml openapi-${{ steps.version.outputs.version }}.yaml
+      - name: Publish release candidate (prerelease)
+        if: steps.version.outputs.kind == 'rc'
+        run: |
+          gh release delete "${{ steps.version.outputs.version }}" --yes 2>/dev/null || true
+          gh release create "${{ steps.version.outputs.version }}" \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --title "Release candidate ${{ steps.version.outputs.version }}" \
+            --notes "Automated release candidate built from \`main\` @ ${{ github.sha }} while the release PR is open." \
+            roadtrip-backend-image-${{ steps.version.outputs.version }}.tar.gz \
+            openapi-${{ steps.version.outputs.version }}.yaml \
+            docker-compose.yml
+      - name: Attach final artifacts to release notes
+        if: steps.version.outputs.kind == 'final'
+        run: |
+          gh release upload "${{ steps.version.outputs.version }}" \
+            roadtrip-backend-image-${{ steps.version.outputs.version }}.tar.gz \
+            openapi-${{ steps.version.outputs.version }}.yaml \
+            docker-compose.yml

@@ -1,0 +1,595 @@
+openapi: 3.1.0
+info:
+  title: Family Road Trip API
+  description: >
+    Event-sourced backend for the Family Road Trip app. Conventions in docs/spec/03-api.md.
+    Identity is the X-Profile-Id header (profile selection, no passwords).
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+tags:
+  - { name: system }
+  - { name: profiles }
+  - { name: config }
+  - { name: destinations }
+  - { name: sync }
+  - { name: journal }
+  - { name: location }
+  - { name: games }
+  - { name: notifications }
+
+paths:
+  /api/health:
+    get:
+      tags: [system]
+      summary: Liveness and connectivity probe (SYS-005)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { const: ok }, version: { type: string } }
+
+  /api/profiles:
+    get:
+      tags: [profiles]
+      summary: List profiles (login screen datasource, PRO-001). Unauthenticated.
+      responses:
+        '200':
+          description: All profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Profile' }
+    post:
+      tags: [profiles]
+      summary: Create profile (parent only, PRO-002)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, role]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 40 }
+                avatar: { type: string }
+                role: { enum: [parent, kid] }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Profile' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/profiles/{id}:
+    patch:
+      tags: [profiles]
+      summary: Update profile (parent only)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 40 }
+                avatar: { type: string }
+                role: { enum: [parent, kid] }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Profile' } } } }
+
+  /api/config:
+    get:
+      tags: [config]
+      summary: Current tunables (CFG-001)
+      responses:
+        '200': { description: Config map, content: { application/json: { schema: { $ref: '#/components/schemas/Config' } } } }
+    put:
+      tags: [config]
+      summary: Update tunables (parent only, CFG-002/003)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConfigPatch' }
+      responses:
+        '200': { description: Updated config, content: { application/json: { schema: { $ref: '#/components/schemas/Config' } } } }
+        '400': { $ref: '#/components/responses/Validation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/destinations:
+    get:
+      tags: [destinations]
+      summary: Ordered destination list
+      responses:
+        '200':
+          description: Destinations
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Destination' } }
+    post:
+      tags: [destinations]
+      summary: Add destination (parent only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, lat, lon]
+              properties:
+                name: { type: string }
+                lat: { type: number }
+                lon: { type: number }
+                order_index: { type: integer }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Destination' } } } }
+
+  /api/destinations/{id}:
+    patch:
+      tags: [destinations]
+      summary: Edit destination (parent only)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                lat: { type: number }
+                lon: { type: number }
+                order_index: { type: integer }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Destination' } } } }
+    delete:
+      tags: [destinations]
+      summary: Remove a pending destination (parent only)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '204': { description: Removed }
+        '409': { description: Only pending destinations can be removed }
+
+  /api/sync/batch:
+    post:
+      tags: [sync]
+      summary: Offline event upload with per-event idempotent results (SYNC-001..005)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                device_id: { type: string }
+                events:
+                  type: array
+                  maxItems: 500
+                  items: { $ref: '#/components/schemas/ClientEvent' }
+      responses:
+        '200':
+          description: Per-event statuses, in input order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [event_id, status]
+                      properties:
+                        event_id: { type: string, format: uuid }
+                        status: { enum: [accepted, duplicate, rejected] }
+                        reason: { type: string }
+                        seq: { type: integer }
+
+  /api/events:
+    get:
+      tags: [sync]
+      summary: Cursor feed over the event stream with optional long-poll (EVT-007/008)
+      parameters:
+        - { name: after, in: query, schema: { type: integer, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 500 } }
+        - { name: types, in: query, schema: { type: string }, description: CSV of event types }
+        - { name: wait, in: query, schema: { type: integer, minimum: 1, maximum: 30 }, description: long-poll seconds }
+      responses:
+        '200':
+          description: Events in seq order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events: { type: array, items: { $ref: '#/components/schemas/Event' } }
+                  next_after: { type: integer }
+
+  /api/journal:
+    get:
+      tags: [journal]
+      summary: Journal feed, newest first (JRNL-001)
+      parameters:
+        - { name: before, in: query, schema: { type: integer }, description: exclusive seq cursor for backward pagination }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+      responses:
+        '200':
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries: { type: array, items: { $ref: '#/components/schemas/JournalEntry' } }
+                  next_before: { type: integer, nullable: true }
+    post:
+      tags: [journal]
+      summary: Create a manual journal post (JRNL-003)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        '201': { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/JournalEntry' } } } }
+
+  /api/map:
+    get:
+      tags: [location]
+      summary: Map/progress state (LOC-008)
+      parameters:
+        - { name: max_points, in: query, schema: { type: integer, default: 500 }, description: breadcrumb decimation }
+      responses:
+        '200': { description: Map state, content: { application/json: { schema: { $ref: '#/components/schemas/MapState' } } } }
+
+  /api/checklist:
+    get:
+      tags: [location]
+      summary: States/cities/stops checklist (LIST-001)
+      responses:
+        '200': { description: Checklist, content: { application/json: { schema: { $ref: '#/components/schemas/Checklist' } } } }
+
+  /api/legs:
+    get:
+      tags: [location]
+      summary: Completed leg summaries (SUM-001)
+      responses:
+        '200':
+          description: Legs
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Leg' } }
+
+  /api/legs/{destinationId}:
+    get:
+      tags: [location]
+      summary: One leg summary by destination (SUM-001)
+      parameters:
+        - { name: destinationId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Leg, content: { application/json: { schema: { $ref: '#/components/schemas/Leg' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/trip/summary:
+    get:
+      tags: [location]
+      summary: Whole-trip aggregation (SUM-002)
+      responses:
+        '200': { description: Trip summary, content: { application/json: { schema: { $ref: '#/components/schemas/TripSummary' } } } }
+
+  /api/games:
+    get:
+      tags: [games]
+      summary: Lobby and game lists (GAME-001)
+      parameters:
+        - { name: status, in: query, schema: { enum: [open, active, finished, abandoned] } }
+        - { name: profile, in: query, schema: { type: string, format: uuid }, description: games involving this profile }
+      responses:
+        '200':
+          description: Games
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Game' } }
+    post:
+      tags: [games]
+      summary: Create a game, open or challenge (GAME-001/002, GAME-013 for hangman options)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [game_type, mode]
+              properties:
+                game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman] }
+                mode: { enum: [open, challenge] }
+                invited_profile_id: { type: string, format: uuid }
+                options:
+                  type: object
+                  description: 'hangman: { word, ignore_dictionary? }'
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Game' } } } }
+
+  /api/games/{id}:
+    get:
+      tags: [games]
+      summary: Current game state via engine view (GAME-008)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Game with view, content: { application/json: { schema: { $ref: '#/components/schemas/Game' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/games/{id}/join:
+    post:
+      tags: [games]
+      summary: Join an open or invited game (GAME-002/003)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Joined, content: { application/json: { schema: { $ref: '#/components/schemas/Game' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: Already full / not joinable }
+
+  /api/games/{id}/moves:
+    post:
+      tags: [games]
+      summary: Make a move (GAME-004/005)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [move]
+              properties:
+                move: { description: game-specific move payload }
+      responses:
+        '200': { description: Applied; returns updated game, content: { application/json: { schema: { $ref: '#/components/schemas/Game' } } } }
+        '400': { description: Illegal move (engine reason) }
+        '409': { description: Not your turn / game not active }
+
+  /api/games/{id}/resign:
+    post:
+      tags: [games]
+      summary: Resign; opponent wins (GAME-015)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Game finished, content: { application/json: { schema: { $ref: '#/components/schemas/Game' } } } }
+
+  /api/games/{id}/events:
+    get:
+      tags: [games]
+      summary: Ordered move stream for replay/spectate, long-pollable (GAME-008/009)
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+        - { name: after, in: query, schema: { type: integer, default: 0 } }
+        - { name: wait, in: query, schema: { type: integer, minimum: 1, maximum: 30 } }
+      responses:
+        '200':
+          description: Game events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events: { type: array, items: { $ref: '#/components/schemas/Event' } }
+                  next_after: { type: integer }
+
+  /api/notifications:
+    get:
+      tags: [notifications]
+      summary: Per-profile notification feed derived from events (NOTIF-001..005)
+      parameters:
+        - { name: after, in: query, schema: { type: integer, default: 0 } }
+        - { name: wait, in: query, schema: { type: integer, minimum: 1, maximum: 30 } }
+      responses:
+        '200':
+          description: Notification items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [seq, kind, text]
+                      properties:
+                        seq: { type: integer }
+                        kind: { enum: [challenge_received, journal_activity] }
+                        text: { type: string }
+                        game_id: { type: string, format: uuid }
+                        link: { $ref: '#/components/schemas/DeepLink' }
+                  next_after: { type: integer }
+
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Forbidden:
+      description: Parent role or invite required
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Validation:
+      description: Validation failure
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+    Profile:
+      type: object
+      required: [id, name, avatar, role]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        avatar: { type: string }
+        role: { enum: [parent, kid] }
+    Config:
+      type: object
+      properties:
+        ping_interval_s: { type: integer }
+        stop_radius_m: { type: number }
+        min_stop_duration_min: { type: number }
+        arrival_radius_m: { type: number }
+        city_radius_km: { type: number }
+    ConfigPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        ping_interval_s: { type: integer, minimum: 5, maximum: 3600 }
+        stop_radius_m: { type: number, minimum: 20, maximum: 1000 }
+        min_stop_duration_min: { type: number, minimum: 1, maximum: 240 }
+        arrival_radius_m: { type: number, minimum: 100, maximum: 5000 }
+        city_radius_km: { type: number, minimum: 1, maximum: 50 }
+    Destination:
+      type: object
+      required: [id, name, lat, lon, order_index, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        lat: { type: number }
+        lon: { type: number }
+        order_index: { type: integer }
+        status: { enum: [pending, active, arrived] }
+        arrived_at: { type: string, format: date-time, nullable: true }
+    ClientEvent:
+      type: object
+      required: [event_id, type, client_ts, payload]
+      properties:
+        event_id: { type: string, format: uuid }
+        type: { enum: [location.ping, journal.post] }
+        client_ts: { type: string, format: date-time }
+        payload: { type: object }
+    Event:
+      type: object
+      required: [seq, event_id, type, payload, client_ts, server_ts]
+      properties:
+        seq: { type: integer }
+        event_id: { type: string, format: uuid }
+        type: { type: string }
+        actor_id: { type: string, format: uuid, nullable: true }
+        payload: { type: object }
+        client_ts: { type: string, format: date-time }
+        server_ts: { type: string, format: date-time }
+    DeepLink:
+      type: object
+      required: [kind]
+      properties:
+        kind: { enum: [game_replay, map_pin, checklist, leg_summary] }
+        game_id: { type: string, format: uuid }
+        lat: { type: number }
+        lon: { type: number }
+        state_code: { type: string }
+        destination_id: { type: string, format: uuid }
+    JournalEntry:
+      type: object
+      required: [seq, kind, ts, text]
+      properties:
+        seq: { type: integer }
+        kind: { enum: [post, stop, state_crossing, leg_arrival, game_result] }
+        ts: { type: string, format: date-time }
+        actor: { $ref: '#/components/schemas/Profile' }
+        text: { type: string }
+        link: { $ref: '#/components/schemas/DeepLink' }
+        syncing: { type: boolean }
+    MapState:
+      type: object
+      required: [breadcrumb]
+      properties:
+        current: { type: object, nullable: true, properties: { lat: {type: number}, lon: {type: number}, ts: {type: string, format: date-time} } }
+        start: { type: object, nullable: true, properties: { lat: {type: number}, lon: {type: number} } }
+        active_destination: { $ref: '#/components/schemas/Destination' }
+        remaining_mi: { type: number, nullable: true }
+        leg_miles: { type: number }
+        breadcrumb:
+          type: array
+          items: { type: object, properties: { lat: {type: number}, lon: {type: number}, ts: {type: string} } }
+    Checklist:
+      type: object
+      properties:
+        states:
+          type: array
+          items: { type: object, properties: { state: {type: string}, state_code: {type: string}, first_entered_at: {type: string, format: date-time} } }
+        cities:
+          type: array
+          items: { type: object, properties: { city: {type: string}, state_code: {type: string}, first_at: {type: string, format: date-time} } }
+        stops:
+          type: array
+          items: { type: object, properties: { lat: {type: number}, lon: {type: number}, started_at: {type: string}, duration_min: {type: number}, place: {type: string, nullable: true} } }
+    LegSummary:
+      type: object
+      required: [wall_minutes, moving_minutes, miles, stop_count, states, games_played]
+      properties:
+        wall_minutes: { type: number }
+        moving_minutes: { type: number }
+        miles: { type: number }
+        stop_count: { type: integer }
+        states: { type: array, items: { type: string } }
+        games_played: { type: integer }
+    Leg:
+      type: object
+      required: [leg_index, started_at]
+      properties:
+        leg_index: { type: integer }
+        destination_id: { type: string, format: uuid, nullable: true }
+        destination_name: { type: string, nullable: true }
+        started_at: { type: string, format: date-time }
+        arrived_at: { type: string, format: date-time, nullable: true }
+        summary: { $ref: '#/components/schemas/LegSummary' }
+    TripSummary:
+      type: object
+      required: [miles, wall_minutes, moving_minutes, states_count, stop_count, games_played]
+      properties:
+        miles: { type: number }
+        wall_minutes: { type: number }
+        moving_minutes: { type: number }
+        states_count: { type: integer }
+        stop_count: { type: integer }
+        games_played: { type: integer }
+        wins_by_profile: { type: object, additionalProperties: { type: integer } }
+        journal_posts_by_profile: { type: object, additionalProperties: { type: integer } }
+    Game:
+      type: object
+      required: [id, game_type, mode, status, created_by]
+      properties:
+        id: { type: string, format: uuid }
+        game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman] }
+        mode: { enum: [open, challenge] }
+        status: { enum: [open, active, finished, abandoned] }
+        created_by: { type: string, format: uuid }
+        invited_profile_id: { type: string, format: uuid, nullable: true }
+        opponent_id: { type: string, format: uuid, nullable: true }
+        move_count: { type: integer }
+        result: { enum: [win, draw, abandoned], nullable: true }
+        winner_id: { type: string, format: uuid, nullable: true }
+        turn: { type: string, format: uuid, nullable: true, description: whose move it is }
+        view: { description: engine view for the requesting profile (GAME-008/014) }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
