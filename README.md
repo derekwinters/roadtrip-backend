@@ -8,6 +8,15 @@ when connectivity returns.
 
 ## Quick start
 
+Pull-only (no checkout, no build — grab `docker-compose.release.yml` from the latest
+[release](https://github.com/derekwinters/roadtrip-backend/releases)):
+
+```bash
+docker compose -f docker-compose.release.yml up -d   # GHCR image + stock postgres
+```
+
+From a checkout:
+
 ```bash
 docker compose up --build        # API on :8080 + PostgreSQL 16
 npm run seed:demo                # optional: populate a fabricated demo day

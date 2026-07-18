@@ -10,8 +10,13 @@ artifacts attach to GitHub releases only (product decision).
 |---------|----------|--------|
 | Every PR | `pr.yml` — lint, typecheck, unit+integration tests (Postgres service), spec validation, docker build | Docker image tarball + OpenAPI copy uploaded as **workflow artifacts** |
 | Push to `main` | `release-please.yml` — maintains the release PR | Release PR with version bump + changelog |
-| Push to `main` while a release PR is open | `rc.yml` | **Release candidate**: prerelease `v{next}-rc.{run}` with image tarball attached |
-| Release PR merged (release created) | `release.yml` | Final image tarball + `openapi.yaml` + compose bundle attached to the versioned GitHub release notes |
+| Push to `main` while a release PR is open | `rc.yml` | **Release candidate**: prerelease `v{next}-rc.{run}` with image tarball attached + GHCR image `ghcr.io/derekwinters/roadtrip-backend:v{next}-rc.{run}` |
+| Release PR merged (release created) | `release.yml` | Final image tarball + `openapi.yaml` + compose bundles attached to the versioned GitHub release notes + GHCR images `:vX.Y.Z` and `:latest` |
+
+GHCR is GitHub's own registry, used so a home server can run the stack with **no checkout and
+no local build**: `docker-compose.release.yml` references only published images (the API from
+GHCR, PostgreSQL from its stock upstream image) — no `build:` blocks. App stores remain out of
+scope; release-notes artifacts stay as they are.
 
 ## Android pipeline
 
@@ -30,3 +35,5 @@ attached to the release notes. `versionName` comes from `version.txt` (release-p
 | REL-004 | Creating a release attaches final build artifacts to the versioned release notes. | manual |
 | REL-005 | CI runs the spec validator; documentation drift fails the build. | manual |
 | REL-006 | The backend Docker image is reproducible from the tagged commit via `docker build` with no network access at runtime (build-time fetches only). | manual |
+| REL-007 | Release and RC builds push the API image to GHCR: `:vX.Y.Z` + `:latest` on releases, `:vX.Y.Z-rc.N` on release candidates. | manual |
+| REL-008 | `docker-compose.release.yml` (attached to release notes) runs the whole stack from published images only — `docker compose -f docker-compose.release.yml up` works on a clean machine with no repo checkout and no local build. | manual |
