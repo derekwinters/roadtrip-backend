@@ -57,11 +57,14 @@ Every observable behavior is a row in a requirement table:
 - `manual` — verified by inspection, the pre-trip dry run, or CI mechanics that cannot
   self-test (e.g. release workflows).
 
+- `planned` — specified and issue-tracked but not yet implemented; the validator checks ID
+  uniqueness only. Flip to `auto` in the implementing change.
+
 Backend areas: **SYS** (architecture), **EVT** (event model), **API** (API conventions),
 **PRO** (profiles), **CFG** (config), **SYNC** (offline sync), **LOC** (location pipeline),
 **GEO** (geocoding), **JRNL** (journal), **LIST** (checklist), **SUM** (summaries),
 **GAME** (games), **NOTIF** (notifications), **SIM** (simulator + seed), **REL** (release
-engineering).
+engineering), **TRIP** (multiple road trips — planned).
 
 Android areas are specified in `roadtrip-android/docs/spec/` and prefixed `AND*`.
 
@@ -80,3 +83,4 @@ Android areas are specified in `roadtrip-android/docs/spec/` and prefixed `AND*`
 | `09-sync-notifications.md` | Offline sync contract, update feeds, notification events |
 | `10-testing.md` | Test strategy, GPS trip simulator, seed data, validation tooling |
 | `11-release-engineering.md` | Versioning (release-please), CI artifacts, RC + final releases |
+| `12-trips.md` | Multiple road trips: parent-only start/end, per-trip history (planned) |

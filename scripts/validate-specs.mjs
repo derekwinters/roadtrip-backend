@@ -29,7 +29,7 @@ async function walk(dir, filter) {
 }
 
 // ---- 1 & 2: requirement tables vs test references ----------------------------------
-const REQ_ROW = /^\|\s*([A-Z]+-\d{3})\s*\|(.+)\|\s*(auto|manual)\s*\|\s*$/
+const REQ_ROW = /^\|\s*([A-Z]+-\d{3})\s*\|(.+)\|\s*(auto|manual|planned)\s*\|\s*$/
 const specFiles = await walk(path.join(root, 'docs'), (f) => f.endsWith('.md'))
 const requirements = new Map() // id -> {file, verify}
 for (const file of specFiles) {
@@ -111,12 +111,14 @@ try {
 
 // ---- report -------------------------------------------------------------------------
 const autoCount = [...requirements.values()].filter((r) => r.verify === 'auto').length
+const plannedCount = [...requirements.values()].filter((r) => r.verify === 'planned').length
 if (errors.length > 0) {
   console.error(`Spec validation FAILED with ${errors.length} problem(s):\n`)
   for (const e of errors) console.error(`  ✗ ${e}`)
   process.exit(1)
 }
 console.log(
-  `Spec validation OK: ${requirements.size} requirements (${autoCount} auto, all test-covered), ` +
-    `${mdFiles.length} docs checked, OpenAPI and routes in sync.`,
+  `Spec validation OK: ${requirements.size} requirements (${autoCount} auto, all test-covered` +
+    (plannedCount > 0 ? `; ${plannedCount} planned` : '') +
+    `), ${mdFiles.length} docs checked, OpenAPI and routes in sync.`,
 )
