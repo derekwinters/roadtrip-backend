@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { requireProfile } from '../auth.js'
 import { notFound } from '../errors.js'
+import { resolveTripScope } from '../trips/scope.js'
 
 const iso = (v: Date | string | null): string | null =>
   v === null ? null : v instanceof Date ? v.toISOString() : v
@@ -22,10 +23,20 @@ function toWire(row: any) {
   }
 }
 
-/** SUM-001: completed legs with their trip.leg.arrived summaries. */
+/**
+ * SUM-001: completed legs with their trip.leg.arrived summaries, scoped to the trip in
+ * scope (TRIP-007; unscoped when no trips exist).
+ */
 export async function legRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/legs', { preHandler: [requireProfile] }, async () => {
-    const { rows } = await app.pool.query(`${LEG_SELECT} ORDER BY l.leg_index`)
+  app.get('/api/legs', { preHandler: [requireProfile] }, async (req) => {
+    const q = z.object({ trip: z.string().uuid().optional() }).parse(req.query)
+    const scope = await resolveTripScope(app.pool, q.trip)
+    const { rows } = await app.pool.query(
+      scope !== null
+        ? `${LEG_SELECT} WHERE l.trip_id = $1 ORDER BY l.leg_index`
+        : `${LEG_SELECT} ORDER BY l.leg_index`,
+      scope !== null ? [scope] : [],
+    )
     return rows.map(toWire)
   })
 

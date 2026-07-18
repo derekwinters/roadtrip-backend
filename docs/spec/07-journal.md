@@ -6,7 +6,10 @@ The journal is the central feed. It is a **read model** over the event stream â€
 event types rendered chronologically. There is no separate journal table.
 
 Journal-worthy events: `journal.post`, `location.stop.ended` (journal_worthy only),
-`location.crossing.state`, `trip.leg.arrived`, `game.finished`.
+`location.crossing.state`, `trip.leg.arrived`, `game.finished`, and the trip lifecycle pair
+`trip.started` / `trip.ended` (TRIP-009). The feed is scoped per trip (TRIP-007): default
+scope is the active trip, else the most recently ended one, else the whole stream when no
+trips exist.
 
 Every journal entry carries a **deep link** descriptor so clients can navigate to the source:
 
@@ -16,6 +19,7 @@ Every journal entry carries a **deep link** descriptor so clients can navigate t
 | `location.stop.ended` | `{kind:"map_pin", lat, lon}` |
 | `location.crossing.state` | `{kind:"checklist", state_code}` |
 | `trip.leg.arrived` | `{kind:"leg_summary", destination_id}` |
+| `trip.started` / `trip.ended` | `{kind:"trip_summary", trip_id}` |
 | `journal.post` | none |
 
 ## Requirements â€” journal
@@ -41,5 +45,5 @@ Every journal entry carries a **deep link** descriptor so clients can navigate t
 | ID | Requirement | Verify |
 |----|-------------|--------|
 | SUM-001 | `GET /api/legs` lists completed legs with their `trip.leg.arrived` summaries; `GET /api/legs/{destination_id}` returns one. | auto |
-| SUM-002 | `GET /api/trip/summary` aggregates the whole trip from events: total miles, wall/moving hours, states count, journal-worthy stops, games played, wins per profile, and journal post counts per profile. | auto |
+| SUM-002 | `GET /api/trip/summary` aggregates the trip in scope from events (default scope per TRIP-007; the whole stream when no trips exist): total miles, wall/moving hours, states count, journal-worthy stops, games played, wins per profile, and journal post counts per profile. | auto |
 | SUM-003 | Trip summary equals the sum of its parts: totals match the per-leg summaries plus the in-progress leg (verified against a simulated multi-leg trip). | auto |

@@ -16,6 +16,7 @@ import { reconcileActiveDestination } from '../routes/destinations.js'
 import { haversineMeters, haversineMiles } from './geo.js'
 import { nearestCityWithin, stateForPoint } from './geocode.js'
 import { isJournalWorthy, stepStopMachine, type StopMachineState } from './stop-machine.js'
+import { loadTripWindows, tripAt, type TripWindow } from '../trips/scope.js'
 
 /** Serialized as the single engine_state row; every field derives from the ping stream. */
 export interface EngineState {
@@ -28,6 +29,8 @@ export interface EngineState {
   leg_states: string[]
   trip_miles: number
   trip_started_at: string | null
+  /** Trip epoch (TRIP-006): the trip whose window contained the last processed ping. */
+  trip_id: string | null
 }
 
 export interface LegSummary {
@@ -64,12 +67,16 @@ function freshState(): EngineState {
     leg_states: [],
     trip_miles: 0,
     trip_started_at: null,
+    trip_id: null,
   }
 }
 
 async function loadState(db: Db): Promise<EngineState> {
   const { rows } = await db.query('SELECT data FROM engine_state WHERE id = 1')
-  return rows.length === 1 ? (rows[0].data as EngineState) : freshState()
+  if (rows.length !== 1) return freshState()
+  const state = rows[0].data as EngineState
+  state.trip_id ??= null // rows persisted before the trips feature lack the field
+  return state
 }
 
 async function saveState(db: Db, state: EngineState): Promise<void> {
@@ -98,6 +105,18 @@ async function insertPingRow(db: Db, ping: PingRow, stateCode: string | null, le
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [ping.seq, ping.lat, ping.lon, ping.accuracyM, ping.tsIso, stateCode, legIndex],
   )
+}
+
+/**
+ * TRIP-006: leg numbering continues from what the epoch's scope already has, so a fresh
+ * trip starts at leg 0 while the unassociated (NULL) epoch never reuses an index.
+ */
+async function nextLegIndex(db: Db, tripId: string | null): Promise<number> {
+  const { rows } = await db.query(
+    'SELECT COALESCE(MAX(leg_index), -1) + 1 AS next FROM legs WHERE trip_id IS NOT DISTINCT FROM $1',
+    [tripId],
+  )
+  return Number(rows[0].next)
 }
 
 /**
@@ -136,12 +155,18 @@ async function computeLegSummary(db: Db, state: EngineState, arrivedAtIso: strin
 /**
  * LOC-006: a stop anchored within arrival_radius_m of the ACTIVE destination arrives
  * there exactly once, records the leg, and activates the next pending destination.
+ * The active destination is the lowest-ordered non-arrived one of the engine's trip
+ * epoch (TRIP-005/006) — identical to the reconciled `status='active'` row live, and
+ * epoch-correct during rebuilds.
  */
 async function checkArrival(db: Db, cfg: AppConfig, state: EngineState, emit: Emit): Promise<void> {
   const stop = state.open_stop
   if (!stop) return
   const { rows } = await db.query(
-    `SELECT id, name, lat, lon FROM destinations WHERE status = 'active' ORDER BY order_index, created_at LIMIT 1`,
+    `SELECT id, name, lat, lon FROM destinations
+     WHERE status <> 'arrived' AND trip_id IS NOT DISTINCT FROM $1
+     ORDER BY order_index, created_at LIMIT 1`,
+    [state.trip_id ?? null],
   )
   if (rows.length === 0) return
   const dest = rows[0]
@@ -157,9 +182,9 @@ async function checkArrival(db: Db, cfg: AppConfig, state: EngineState, emit: Em
   await db.query(`UPDATE destinations SET status = 'arrived', arrived_at = $2 WHERE id = $1`, [dest.id, arrivedAt])
   await reconcileActiveDestination(db)
   await db.query(
-    `INSERT INTO legs (leg_index, destination_id, started_at, arrived_at, summary)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [state.leg_index, dest.id, state.leg_started_at, arrivedAt, JSON.stringify(summary)],
+    `INSERT INTO legs (leg_index, destination_id, started_at, arrived_at, summary, trip_id)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [state.leg_index, dest.id, state.leg_started_at, arrivedAt, JSON.stringify(summary), state.trip_id ?? null],
   )
   await emit('trip.leg.arrived', { destination_id: dest.id, destination_name: dest.name, summary }, arrivedAt)
 
@@ -169,7 +194,14 @@ async function checkArrival(db: Db, cfg: AppConfig, state: EngineState, emit: Em
   state.leg_states = state.state_code ? [state.state_code] : []
 }
 
-async function processPing(db: Db, cfg: AppConfig, state: EngineState, ping: PingRow, emit: Emit): Promise<void> {
+async function processPing(
+  db: Db,
+  cfg: AppConfig,
+  state: EngineState,
+  trips: TripWindow[],
+  ping: PingRow,
+  emit: Emit,
+): Promise<void> {
   // LOC-001: exactly-once. Seqs already folded into the read model are never reprocessed.
   const seen = await db.query('SELECT 1 FROM pings WHERE seq = $1', [ping.seq])
   if ((seen.rowCount ?? 0) > 0) return
@@ -180,6 +212,24 @@ async function processPing(db: Db, cfg: AppConfig, state: EngineState, ping: Pin
     const hit = stateForPoint(ping.lat, ping.lon)
     await insertPingRow(db, ping, hit?.code ?? null, state.leg_index)
     return
+  }
+
+  // TRIP-006: a ping in a different trip window starts a new engine epoch — mileage,
+  // states, and leg numbering reset; the state annotation resets so the starting state
+  // is checklisted per trip (GEO-003 style); a stop left open by the previous epoch is
+  // abandoned (its row keeps the old trip); mileage and stop pairing never span epochs.
+  const pingTrip = tripAt(trips, ping.tsMs)
+  if (pingTrip !== (state.trip_id ?? null)) {
+    state.trip_id = pingTrip
+    state.trip_started_at = ping.tsIso
+    state.trip_miles = 0
+    state.leg_index = await nextLegIndex(db, pingTrip)
+    state.leg_started_at = ping.tsIso
+    state.leg_miles = 0
+    state.leg_states = []
+    state.state_code = null
+    state.last_ping = null
+    state.open_stop = null
   }
 
   if (!state.trip_started_at) {
@@ -199,13 +249,14 @@ async function processPing(db: Db, cfg: AppConfig, state: EngineState, ping: Pin
     if (!state.leg_states.includes(hit.code)) state.leg_states.push(hit.code)
   }
 
-  // GEO-004: mark the nearest city within city_radius_km visited, once per trip.
+  // GEO-004: mark the nearest city within city_radius_km visited, once per trip
+  // (dedupe is per trip epoch, TRIP-006).
   const city = nearestCityWithin(ping.lat, ping.lon, cfg.city_radius_km)
   if (city) {
     const inserted = await db.query(
-      `INSERT INTO cities_visited (city, state_code, first_at) VALUES ($1, $2, $3)
-       ON CONFLICT (city, state_code) DO NOTHING`,
-      [city.city, city.state_code, ping.tsIso],
+      `INSERT INTO cities_visited (city, state_code, first_at, trip_id) VALUES ($1, $2, $3, $4)
+       ON CONFLICT ((COALESCE(trip_id, '00000000-0000-0000-0000-000000000000'::uuid)), city, state_code) DO NOTHING`,
+      [city.city, city.state_code, ping.tsIso, state.trip_id ?? null],
     )
     if ((inserted.rowCount ?? 0) > 0) {
       await emit('location.crossing.city', { city: city.city, state_code: city.state_code }, ping.tsIso)
@@ -247,8 +298,9 @@ async function processPing(db: Db, cfg: AppConfig, state: EngineState, ping: Pin
         started_at: startedAtIso,
       }
       await db.query(
-        `INSERT INTO stops (id, anchor_lat, anchor_lon, started_at, leg_index) VALUES ($1, $2, $3, $4, $5)`,
-        [stopId, effect.anchorLat, effect.anchorLon, startedAtIso, state.leg_index],
+        `INSERT INTO stops (id, anchor_lat, anchor_lon, started_at, leg_index, trip_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [stopId, effect.anchorLat, effect.anchorLon, startedAtIso, state.leg_index, state.trip_id ?? null],
       )
       // LOC-003: the stop.started event is backdated to the first stationary ping.
       await emit('location.stop.started', { stop_id: stopId, lat: effect.anchorLat, lon: effect.anchorLon }, startedAtIso)
@@ -304,11 +356,12 @@ export async function processNewPings(pool: pg.Pool, bus: EventBus, pingSeqs: nu
       [pingSeqs],
     )
     const cfg = await getConfig(client) // CFG-004: fresh thresholds every batch
+    const trips = await loadTripWindows(client) // TRIP-006: epoch resolution per batch
     const state = await loadState(client)
     const emit: Emit = async (type, payload, clientTs) => {
       await appendEvent(client, { type, actorId: null, payload, clientTs })
     }
-    for (const row of rows) await processPing(client, cfg, state, toPingRow(row), emit)
+    for (const row of rows) await processPing(client, cfg, state, trips, toPingRow(row), emit)
     await saveState(client, state)
     await client.query('COMMIT')
   } catch (err) {
@@ -340,12 +393,13 @@ export async function rebuildReadModels(pool: pg.Pool): Promise<void> {
     await reconcileActiveDestination(client)
 
     const cfg = await getConfig(client)
+    const trips = await loadTripWindows(client)
     const state = freshState()
     const noEmit: Emit = async () => {}
     const { rows } = await client.query(
       `SELECT seq, payload, client_ts FROM events WHERE type = 'location.ping' ORDER BY client_ts, seq`,
     )
-    for (const row of rows) await processPing(client, cfg, state, toPingRow(row), noEmit)
+    for (const row of rows) await processPing(client, cfg, state, trips, toPingRow(row), noEmit)
     await saveState(client, state)
     await client.query('COMMIT')
   } catch (err) {

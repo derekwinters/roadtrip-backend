@@ -16,6 +16,12 @@ from config (`05-config.md`).
 - **Arrival** — a stop whose anchor lies within `arrival_radius_m` of the **active**
   destination. Triggers the leg summary and advances the tracker to the next destination.
 - **Leg** — the span between trip start (or previous arrival) and an arrival.
+- **Trip epoch** (TRIP-006, see `12-trips.md`) — the engine scopes its accumulators to the
+  trip containing the ping being processed. Leg numbering under LOC-006/LOC-009 restarts per
+  trip (a fresh trip begins at leg 0), the active destination is the lowest-ordered
+  non-arrived destination *of that trip*, and each city is collected once per trip (refines
+  GEO-004's "once per trip"). With no trips defined there is a single implicit epoch and
+  behavior is unchanged.
 
 ## Destinations
 

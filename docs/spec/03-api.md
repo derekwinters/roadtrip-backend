@@ -34,7 +34,12 @@ contract follows.
 | GET `/api/map` | map/progress state | any |
 | GET `/api/checklist` | states/cities/stops | any |
 | GET `/api/legs` / GET `/api/legs/{destinationId}` | leg summaries | any |
-| GET `/api/trip/summary` | whole-trip aggregation | any |
+| GET `/api/trip/summary` | aggregation for the trip in scope | any |
+| GET `/api/trips` | list trips | any |
+| POST `/api/trips` | start a trip | parent |
+| PATCH `/api/trips/{id}` | rename a trip | parent |
+| POST `/api/trips/{id}/end` | end the active trip | parent |
+| GET `/api/trips/{id}/summary` | one trip's aggregation | any |
 | GET `/api/games` | lobby & game lists (`status` filter) | any |
 | POST `/api/games` | create game (open/challenge) | any |
 | POST `/api/games/{id}/join` | join | any (invite rules) |

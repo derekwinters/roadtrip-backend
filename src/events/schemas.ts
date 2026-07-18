@@ -47,6 +47,16 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
       }),
     })
     .strict(),
+  'trip.started': z.object({ trip_id: uuid, name: z.string() }).strict(),
+  'trip.ended': z
+    .object({
+      trip_id: uuid,
+      name: z.string(),
+      // Totals frozen at end time for the journal entry (TRIP-009).
+      miles: z.number().nonnegative(),
+      states_count: z.number().int().nonnegative(),
+    })
+    .strict(),
 
   'game.created': z
     .object({

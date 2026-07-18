@@ -15,6 +15,7 @@ import { mapRoutes } from './routes/map.js'
 import { checklistRoutes } from './routes/checklist.js'
 import { legRoutes } from './routes/legs.js'
 import { tripRoutes } from './routes/trip.js'
+import { tripsRoutes } from './routes/trips.js'
 import { gameRoutes } from './routes/games.js'
 import { notificationRoutes } from './routes/notifications.js'
 
@@ -83,6 +84,7 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   await app.register(checklistRoutes)
   await app.register(legRoutes)
   await app.register(tripRoutes)
+  await app.register(tripsRoutes)
   await app.register(gameRoutes)
   await app.register(notificationRoutes)
 

@@ -19,6 +19,8 @@ export interface EventRow {
   payload: any
   client_ts: string
   server_ts: string
+  /** Trip window containing client_ts (TRIP-004); always set on rows read from the store. */
+  trip_id?: string | null
 }
 
 export type AppendResult = { status: 'inserted'; seq: number } | { status: 'duplicate'; seq: number }
@@ -26,12 +28,19 @@ export type AppendResult = { status: 'inserted'; seq: number } | { status: 'dupl
 /**
  * Appends an event. Idempotent on event_id (EVT-001): a replayed event is reported as
  * `duplicate` and the stored row is untouched. Callers notify the bus after commit.
+ *
+ * TRIP-004: the event's trip_id is resolved at insert time as the trip whose
+ * [started_at, ended_at) window contains client_ts — so offline events flushed after a
+ * trip ended still land in the right trip; NULL when no window matches.
  */
 export async function appendEvent(db: Db, input: AppendInput): Promise<AppendResult> {
   const eventId = input.eventId ?? randomUUID()
   const inserted = await db.query(
-    `INSERT INTO events (event_id, type, actor_id, device_id, payload, client_ts)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO events (event_id, type, actor_id, device_id, payload, client_ts, trip_id)
+     VALUES ($1, $2, $3, $4, $5, $6,
+             (SELECT id FROM trips
+              WHERE started_at <= $6::timestamptz AND (ended_at IS NULL OR ended_at > $6::timestamptz)
+              ORDER BY started_at DESC LIMIT 1))
      ON CONFLICT (event_id) DO NOTHING
      RETURNING seq`,
     [eventId, input.type, input.actorId ?? null, input.deviceId ?? null, JSON.stringify(input.payload ?? {}), input.clientTs],
@@ -59,6 +68,7 @@ export function rowToWire(row: any): EventRow {
     payload: row.payload,
     client_ts: row.client_ts instanceof Date ? row.client_ts.toISOString() : row.client_ts,
     server_ts: row.server_ts instanceof Date ? row.server_ts.toISOString() : row.server_ts,
+    trip_id: row.trip_id ?? null,
   }
 }
 

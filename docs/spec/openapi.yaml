@@ -15,6 +15,7 @@ tags:
   - { name: sync }
   - { name: journal }
   - { name: location }
+  - { name: trips }
   - { name: games }
   - { name: notifications }
 
@@ -210,10 +211,11 @@ paths:
   /api/journal:
     get:
       tags: [journal]
-      summary: Journal feed, newest first (JRNL-001)
+      summary: Journal feed, newest first (JRNL-001), scoped per trip (TRIP-007)
       parameters:
         - { name: before, in: query, schema: { type: integer }, description: exclusive seq cursor for backward pagination }
         - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { $ref: '#/components/parameters/TripScope' }
       responses:
         '200':
           description: Journal entries
@@ -242,23 +244,28 @@ paths:
   /api/map:
     get:
       tags: [location]
-      summary: Map/progress state (LOC-008)
+      summary: Map/progress state (LOC-008), scoped per trip (TRIP-007)
       parameters:
         - { name: max_points, in: query, schema: { type: integer, default: 500 }, description: breadcrumb decimation }
+        - { $ref: '#/components/parameters/TripScope' }
       responses:
         '200': { description: Map state, content: { application/json: { schema: { $ref: '#/components/schemas/MapState' } } } }
 
   /api/checklist:
     get:
       tags: [location]
-      summary: States/cities/stops checklist (LIST-001)
+      summary: States/cities/stops checklist (LIST-001), scoped per trip (TRIP-007)
+      parameters:
+        - { $ref: '#/components/parameters/TripScope' }
       responses:
         '200': { description: Checklist, content: { application/json: { schema: { $ref: '#/components/schemas/Checklist' } } } }
 
   /api/legs:
     get:
       tags: [location]
-      summary: Completed leg summaries (SUM-001)
+      summary: Completed leg summaries (SUM-001), scoped per trip (TRIP-007)
+      parameters:
+        - { $ref: '#/components/parameters/TripScope' }
       responses:
         '200':
           description: Legs
@@ -279,9 +286,73 @@ paths:
   /api/trip/summary:
     get:
       tags: [location]
-      summary: Whole-trip aggregation (SUM-002)
+      summary: Trip aggregation for the trip in scope (SUM-002, TRIP-007)
+      parameters:
+        - { $ref: '#/components/parameters/TripScope' }
       responses:
         '200': { description: Trip summary, content: { application/json: { schema: { $ref: '#/components/schemas/TripSummary' } } } }
+
+  /api/trips:
+    get:
+      tags: [trips]
+      summary: List trips with status and timestamps (TRIP-003)
+      responses:
+        '200':
+          description: Trips, oldest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Trip' } }
+    post:
+      tags: [trips]
+      summary: Start a road trip (parent only, TRIP-001)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 80, description: defaults to "Road Trip <start date>" }
+      responses:
+        '201': { description: Trip started, content: { application/json: { schema: { $ref: '#/components/schemas/Trip' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: A trip is already active, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/trips/{id}:
+    patch:
+      tags: [trips]
+      summary: Rename a trip (parent only, TRIP-003)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 80 }
+      responses:
+        '200': { description: Renamed, content: { application/json: { schema: { $ref: '#/components/schemas/Trip' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/trips/{id}/end:
+    post:
+      tags: [trips]
+      summary: End the active trip (parent only, TRIP-002)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Trip ended, content: { application/json: { schema: { $ref: '#/components/schemas/Trip' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: Trip is not active, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /api/trips/{id}/summary:
+    get:
+      tags: [trips]
+      summary: Aggregation scoped to one trip (TRIP-008)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Trip summary, content: { application/json: { schema: { $ref: '#/components/schemas/TripSummary' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /api/games:
     get:
@@ -416,6 +487,14 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    TripScope:
+      name: trip
+      in: query
+      required: false
+      schema: { type: string, format: uuid }
+      description: >
+        Trip scope (TRIP-007). Defaults to the active trip, else the most recently ended
+        trip; unscoped (whole stream) only when no trips exist. Unknown ids are 404.
   responses:
     Forbidden:
       description: Parent role or invite required
@@ -498,22 +577,33 @@ components:
         payload: { type: object }
         client_ts: { type: string, format: date-time }
         server_ts: { type: string, format: date-time }
+        trip_id: { type: string, format: uuid, nullable: true, description: trip window containing client_ts (TRIP-004) }
+    Trip:
+      type: object
+      required: [id, name, status, started_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        status: { enum: [active, ended] }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, nullable: true }
     DeepLink:
       type: object
       required: [kind]
       properties:
-        kind: { enum: [game_replay, map_pin, checklist, leg_summary] }
+        kind: { enum: [game_replay, map_pin, checklist, leg_summary, trip_summary] }
         game_id: { type: string, format: uuid }
         lat: { type: number }
         lon: { type: number }
         state_code: { type: string }
         destination_id: { type: string, format: uuid }
+        trip_id: { type: string, format: uuid }
     JournalEntry:
       type: object
       required: [seq, kind, ts, text]
       properties:
         seq: { type: integer }
-        kind: { enum: [post, stop, state_crossing, leg_arrival, game_result] }
+        kind: { enum: [post, stop, state_crossing, leg_arrival, game_result, trip_start, trip_end] }
         ts: { type: string, format: date-time }
         actor: { $ref: '#/components/schemas/Profile' }
         text: { type: string }
