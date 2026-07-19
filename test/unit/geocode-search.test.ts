@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ThrottleQueue, nominatimFetcher } from '../../src/geocode/search.js'
+import { ThrottleQueue, nominatimFetcher, UpstreamGeocodeError } from '../../src/geocode/search.js'
 
 /** Deterministic virtual clock: sleep() advances time instantly. */
 function fakeClock() {
@@ -112,10 +112,32 @@ describe('default Nominatim fetcher', () => {
     expect(matches[0]).toEqual({ display_name: 'Match 0', lat: 40, lon: -100 })
   })
 
-  it('throws on non-2xx upstream responses so misses become 503s [GSR-004]', async () => {
+  it('throws a typed UpstreamGeocodeError carrying the HTTP status on non-2xx [GSR-006]', async () => {
     const fetchImpl = (async () =>
       ({ ok: false, status: 429, json: async () => ({}) }) as Response) as typeof fetch
     const fetcher = nominatimFetcher({ fetchImpl })
-    await expect(fetcher('anywhere')).rejects.toThrow(/429/)
+    const err = await fetcher('anywhere').catch((e) => e)
+    expect(err).toBeInstanceOf(UpstreamGeocodeError)
+    expect((err as UpstreamGeocodeError).status).toBe(429)
+    expect(String(err)).toMatch(/429/)
+  })
+
+  it('treats a reached-but-unusable (non-array) body as an upstream error [GSR-006]', async () => {
+    const fetchImpl = (async () =>
+      ({ ok: true, status: 200, json: async () => ({ not: 'an array' }) }) as Response) as typeof fetch
+    const fetcher = nominatimFetcher({ fetchImpl })
+    const err = await fetcher('anywhere').catch((e) => e)
+    expect(err).toBeInstanceOf(UpstreamGeocodeError)
+    expect((err as UpstreamGeocodeError).status).toBe(200)
+  })
+
+  it('propagates the raw fetch error (unreachable) without wrapping it as an upstream error [GSR-004]', async () => {
+    const fetchImpl = (async () => {
+      throw new TypeError('fetch failed')
+    }) as typeof fetch
+    const fetcher = nominatimFetcher({ fetchImpl })
+    const err = await fetcher('anywhere').catch((e) => e)
+    expect(err).not.toBeInstanceOf(UpstreamGeocodeError)
+    expect(String(err)).toMatch(/fetch failed/)
   })
 })

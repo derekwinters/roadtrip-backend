@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { buildApp } from '../../src/app.js'
 import { createTestApp, asProfile, type TestApp } from '../helpers/app.js'
 import type { GeocodeMatch, UpstreamFetcher } from '../../src/geocode/search.js'
+import { UpstreamGeocodeError } from '../../src/geocode/search.js'
 
 /**
  * Address search proxy (docs/spec/13-geocode-search.md, GSR-001..005). The upstream is
@@ -139,6 +140,30 @@ describe('geocode address search proxy', () => {
     expect(up.statusCode).toBe(200)
     expect(up.json()).toEqual(SEVEN_MATCHES.slice(0, 5))
     expect(stub.state.calls.filter((c) => c.query === 'boise')).toHaveLength(2)
+  })
+
+  it('a reached-but-erroring upstream → 503 geocode_upstream_error, distinct from offline, not cached [GSR-006]', async () => {
+    // Upstream is reachable but refuses us (e.g. Nominatim 429) — the fetcher throws a typed error.
+    const refusing: UpstreamFetcher = async () => {
+      throw new UpstreamGeocodeError(429)
+    }
+    const t2 = await createTestApp({ geocode: { fetcher: refusing, minSpacingMs: 1 } })
+    try {
+      const p2 = await t2.addProfile('Pat', 'parent')
+      const res = await t2.app.inject({
+        method: 'GET',
+        url: '/api/geocode?q=nowhere',
+        headers: asProfile(p2.id),
+      })
+      expect(res.statusCode).toBe(503)
+      expect(res.json().error.code).toBe('geocode_upstream_error') // NOT geocode_unavailable
+      expect(res.json().error.message).toMatch(/429/) // surfaces the upstream status
+
+      const { rows } = await t2.db.pool.query("SELECT 1 FROM geocode_cache WHERE query = 'nowhere'")
+      expect(rows).toHaveLength(0) // failure not cached
+    } finally {
+      await t2.close()
+    }
   })
 
   it('concurrent identical queries share a single upstream call [GSR-003] [GSR-005]', async () => {

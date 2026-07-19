@@ -7,8 +7,12 @@ const querySchema = z.object({ q: z.string().trim().min(1).max(200) })
 
 /**
  * GET /api/geocode — parent-only address search proxy (GSR-001). Cache-first, then
- * throttled upstream; 503 geocode_unavailable when offline without a cached result
- * (GSR-002..005). Best-effort online by design — see docs/spec/13-geocode-search.md.
+ * throttled upstream. On a cache miss whose upstream call fails, the search service throws
+ * an AppError that the global error handler renders as the standard envelope, surfacing the
+ * distinct 503 reason: `geocode_unavailable` when the upstream is unreachable/offline
+ * (GSR-004) vs. `geocode_upstream_error` (carrying the upstream HTTP status) when the
+ * upstream is reached but refuses (GSR-006). Best-effort online by design — see
+ * docs/spec/13-geocode-search.md.
  */
 export function geocodeRoutes(search: GeocodeSearch) {
   return async function routes(app: FastifyInstance): Promise<void> {
