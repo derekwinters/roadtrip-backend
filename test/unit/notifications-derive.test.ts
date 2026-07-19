@@ -90,6 +90,17 @@ describe('deriveNotifications', () => {
         destination_name: 'Twine Ball',
         summary: { wall_minutes: 60, moving_minutes: 50, miles: 40, stop_count: 1, states: [], games_played: 0 },
       }),
+    ]
+    for (const p of [DAD, SAM, MOM]) {
+      const items = deriveNotifications(events, p, profiles)
+      expect(items).toHaveLength(3)
+      expect(items.every((i) => i.kind === 'journal_activity')).toBe(true)
+    }
+  })
+
+  it('a game.finished result produces no notification for any profile [NOTIF-004]', () => {
+    // Game results still render in the journal feed, but only challenges notify for games.
+    const actorless = [
       ev('game.finished', {
         game_id: GAME_ID,
         game_type: 'chess',
@@ -100,22 +111,20 @@ describe('deriveNotifications', () => {
       }),
     ]
     for (const p of [DAD, SAM, MOM]) {
-      const items = deriveNotifications(events, p, profiles)
-      expect(items).toHaveLength(4)
-      expect(items.every((i) => i.kind === 'journal_activity')).toBe(true)
+      expect(deriveNotifications(actorless, p, profiles)).toHaveLength(0)
     }
-  })
 
-  it('journal-worthy events with an actor skip that actor [NOTIF-004]', () => {
-    const events = [
+    // Even when the result carries an actor, nobody is notified.
+    const withActor = [
       ev(
         'game.finished',
         { game_id: GAME_ID, game_type: 'chess', result: 'win', winner_profile_id: SAM, loser_profile_id: DAD, move_count: 12 },
         SAM,
       ),
     ]
-    expect(deriveNotifications(events, SAM, profiles)).toHaveLength(0)
-    expect(deriveNotifications(events, DAD, profiles)).toHaveLength(1)
+    for (const p of [DAD, SAM, MOM]) {
+      expect(deriveNotifications(withActor, p, profiles)).toHaveLength(0)
+    }
   })
 
   it('pings, moves, short stops and config/admin events never notify [NOTIF-004]', () => {
@@ -143,25 +152,18 @@ describe('deriveNotifications', () => {
       invited_profile_id: MOM,
       options: {},
     })
-    const finished = ev('game.finished', {
-      game_id: GAME_ID,
-      game_type: 'checkers',
-      result: 'win',
-      winner_profile_id: DAD,
-      loser_profile_id: MOM,
-      move_count: 30,
-    })
-    const items = deriveNotifications([challenge, finished], MOM, profiles)
+    const journalPost = ev('journal.post', { text: 'spotted a moose' }, DAD)
+    const items = deriveNotifications([challenge, journalPost], MOM, profiles)
     expect(items).toHaveLength(2)
     for (const item of items) {
       expect(typeof item.seq).toBe('number')
       expect(typeof item.text).toBe('string')
       expect(item.text.length).toBeGreaterThan(0)
-      expect(item.game_id).toBe(GAME_ID)
     }
     expect(items[0]!.seq).toBe(challenge.seq)
-    expect(items[1]!.seq).toBe(finished.seq)
+    expect(items[1]!.seq).toBe(journalPost.seq)
     expect(items[0]!.kind).toBe('challenge_received')
+    expect(items[0]!.game_id).toBe(GAME_ID)
     expect(items[1]!.kind).toBe('journal_activity')
   })
 })

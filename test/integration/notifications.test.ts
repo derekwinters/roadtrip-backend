@@ -105,6 +105,7 @@ describe('notifications feed', () => {
       destination_name: 'Twine Ball',
       summary: { wall_minutes: 60, moving_minutes: 50, miles: 40, stop_count: 1, states: ['KS'], games_played: 0 },
     })
+    // A finished game renders in the journal feed but must NOT notify (only challenges do).
     await seed('game.finished', {
       game_id: gameId,
       game_type: 'chess',
@@ -123,14 +124,16 @@ describe('notifications feed', () => {
     const lastScanned = await tip()
     for (const p of [dad, mom, sam]) {
       const res = await poll(p.id, cursor)
-      expect(res.items).toHaveLength(4)
+      // Three automatic journal events notify; the game result does not.
+      expect(res.items).toHaveLength(3)
       expect(res.items.every((i) => i.kind === 'journal_activity')).toBe(true)
+      expect(res.items.some((i) => i.game_id === gameId)).toBe(false)
       // Cursor lands on the last scanned event, not the last matching one.
       expect(res.next_after).toBe(lastScanned)
     }
   })
 
-  it('journal-worthy events with an actor skip that actor [NOTIF-004]', async () => {
+  it('a game result never notifies, for actor or anyone else [NOTIF-004]', async () => {
     const cursor = await tip()
     await appendEvent(t.db.pool, {
       type: 'game.finished',
@@ -139,7 +142,8 @@ describe('notifications feed', () => {
       clientTs: new Date(),
     })
     expect((await poll(sam.id, cursor)).items).toHaveLength(0)
-    expect((await poll(dad.id, cursor)).items).toHaveLength(1)
+    expect((await poll(dad.id, cursor)).items).toHaveLength(0)
+    expect((await poll(mom.id, cursor)).items).toHaveLength(0)
   })
 
   it('long-polls with wait and wakes within seconds of a new event [NOTIF-005]', async () => {
