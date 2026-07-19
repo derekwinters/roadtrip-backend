@@ -215,6 +215,23 @@ export async function resignGame(app: FastifyInstance, byId: string, id: string)
       throw forbidden('not_your_turn', 'You are not a player in this game')
     }
     if (game.status !== 'active') throw conflict('conflict', 'Game is not active')
+
+    // GAME-018: hangman is asymmetric. The guesser (players[1] = opponent_id) cannot end the
+    // game; only the setter/creator (players[0]) can, and doing so ABANDONS the puzzle — nobody
+    // wins (product decision roadtrip-backend#77). All other games follow GAME-015 below.
+    if (game.game_type === 'hangman') {
+      if (byId !== game.created_by) {
+        throw forbidden('forbidden', 'Only the word setter can end this hangman game')
+      }
+      const { rows } = await client.query(
+        `UPDATE games SET status = 'abandoned', result = 'abandoned', winner_id = NULL, finished_at = now()
+         WHERE id = $1 RETURNING *`,
+        [id],
+      )
+      await emit(client, 'game.abandoned', byId, { game_id: id, by_profile_id: byId })
+      return rows[0] as GameRow
+    }
+
     // GAME-015: resigning is a win for the opponent.
     const winnerId = byId === game.created_by ? game.opponent_id! : game.created_by
     const { rows } = await client.query(
