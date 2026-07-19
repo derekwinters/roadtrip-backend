@@ -368,6 +368,57 @@ describe('hangman over the API', () => {
     expect(game).toMatchObject({ status: 'finished', result: 'win', winner_id: dad.id })
     expect(game.view.word).toBe('banana') // revealed once over
   })
+
+  it('exposes a viewerless masked hangman_display on list and get mid-play [GAME-019]', async () => {
+    const created = await createGame(dad.id, { game_type: 'hangman', mode: 'open', options: { word: 'road trip' } })
+    const id = created.json().id
+    await join(sam.id, id)
+    await move(sam.id, id, { letter: 'r' }) // reveals both r's, spaces preserved
+
+    // GET /api/games/{id}: hangman_display is the mask (guessed revealed, unguessed '_').
+    const get = (await t.app.inject({ method: 'GET', url: `/api/games/${id}`, headers: asProfile(sam.id) })).json()
+    expect(get.hangman_display).toBe('r___ _r__')
+
+    // Same masked value in the viewerless list summary (no engine view fetched).
+    const lobby = (await t.app.inject({ method: 'GET', url: `/api/games?profile=${sam.id}`, headers: asProfile(sam.id) })).json()
+    const summary = lobby.find((g: any) => g.id === id)
+    expect(summary).toBeTruthy()
+    expect(summary.view).toBeNull() // list is viewerless — no engine view
+    expect(summary.hangman_display).toBe('r___ _r__')
+
+    // CRITICAL: even the setter's list/get summary must not leak an unguessed letter.
+    const setterGet = (await t.app.inject({ method: 'GET', url: `/api/games/${id}`, headers: asProfile(dad.id) })).json()
+    expect(setterGet.hangman_display).toBe('r___ _r__')
+    expect(setterGet.hangman_display).not.toMatch(/[oadtip]/)
+    const setterLobby = (await t.app.inject({ method: 'GET', url: `/api/games?profile=${dad.id}`, headers: asProfile(dad.id) })).json()
+    expect(setterLobby.find((g: any) => g.id === id).hangman_display).toBe('r___ _r__')
+  })
+
+  it('omits hangman_display for non-hangman games [GAME-019]', async () => {
+    const id = await activeTtt()
+    const get = (await t.app.inject({ method: 'GET', url: `/api/games/${id}`, headers: asProfile(dad.id) })).json()
+    expect(get).not.toHaveProperty('hangman_display')
+    const lobby = (await t.app.inject({ method: 'GET', url: `/api/games?profile=${dad.id}`, headers: asProfile(dad.id) })).json()
+    expect(lobby.find((g: any) => g.id === id)).not.toHaveProperty('hangman_display')
+
+    // An open hangman game with no folded state yet also has no hangman_display.
+    const open = (await createGame(dad.id, { game_type: 'hangman', mode: 'open', options: { word: 'banana' } })).json()
+    const openGet = (await t.app.inject({ method: 'GET', url: `/api/games/${open.id}`, headers: asProfile(dad.id) })).json()
+    expect(openGet).not.toHaveProperty('hangman_display')
+  })
+
+  it('reveals the full word in hangman_display once the guesser solves it [GAME-019]', async () => {
+    const created = await createGame(dad.id, { game_type: 'hangman', mode: 'open', options: { word: 'banana' } })
+    const id = created.json().id
+    await join(sam.id, id)
+    for (const letter of 'ban') expect((await move(sam.id, id, { letter })).statusCode).toBe(200)
+
+    const get = (await t.app.inject({ method: 'GET', url: `/api/games/${id}`, headers: asProfile(sam.id) })).json()
+    expect(get).toMatchObject({ status: 'finished', result: 'win', winner_id: sam.id })
+    expect(get.hangman_display).toBe('banana') // game over — full word is public
+    const lobby = (await t.app.inject({ method: 'GET', url: `/api/games?profile=${sam.id}`, headers: asProfile(sam.id) })).json()
+    expect(lobby.find((g: any) => g.id === id).hangman_display).toBe('banana')
+  })
 })
 
 describe('resign and notifications', () => {
