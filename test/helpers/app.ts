@@ -7,6 +7,8 @@ export interface TestApp {
   db: TestDb
   /** Creates a profile directly in the database and returns it. */
   addProfile: (name: string, role: 'parent' | 'kid') => Promise<{ id: string; name: string; role: string }>
+  /** Turns open_profile_creation off through the API, as the given parent (PRO-009/CFG-006). */
+  closeCreation: (parentId: string) => Promise<void>
   close: () => Promise<void>
 }
 
@@ -28,6 +30,15 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
         [name, role],
       )
       return rows[0]
+    },
+    closeCreation: async (parentId) => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/api/config',
+        headers: asProfile(parentId),
+        payload: { open_profile_creation: false },
+      })
+      if (res.statusCode !== 200) throw new Error(`closeCreation failed: ${res.statusCode} ${res.body}`)
     },
     close: async () => {
       await app.close()

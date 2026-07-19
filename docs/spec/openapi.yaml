@@ -50,8 +50,10 @@ paths:
     post:
       tags: [profiles]
       summary: >
-        Create profile (parent only, PRO-002). First-run bootstrap (PRO-008): while zero
-        profiles exist this is unauthenticated but must create a parent (400 otherwise).
+        Create profile (PRO-002). While `open_profile_creation` is on (the default) anyone
+        may create — unauthenticated and kid profiles included (PRO-009); when off it is
+        parent-only. First-run bootstrap (PRO-008): while zero profiles exist this is
+        unauthenticated but must create a parent (400 otherwise), regardless of the flag.
       requestBody:
         required: true
         content:
@@ -654,6 +656,7 @@ components:
         min_stop_duration_min: { type: number }
         arrival_radius_m: { type: number }
         city_radius_km: { type: number }
+        open_profile_creation: { type: boolean }
     ConfigPatch:
       type: object
       additionalProperties: false
@@ -663,6 +666,7 @@ components:
         min_stop_duration_min: { type: number, minimum: 1, maximum: 240 }
         arrival_radius_m: { type: number, minimum: 100, maximum: 5000 }
         city_radius_km: { type: number, minimum: 1, maximum: 50 }
+        open_profile_creation: { type: boolean }
     Destination:
       type: object
       required: [id, name, lat, lon, order_index, status]

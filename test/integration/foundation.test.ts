@@ -68,7 +68,14 @@ describe('profiles & permissions', () => {
     expect(names).toContain('Sam')
   })
 
-  it('parents can create profiles, kids cannot [PRO-002] [PRO-007]', async () => {
+  it('parents can create profiles; kids only while creation is open [PRO-002] [PRO-007] [PRO-009]', async () => {
+    // With open_profile_creation off, the strict parent-only rule applies.
+    await t.app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: asProfile(parent.id),
+      payload: { open_profile_creation: false },
+    })
     const denied = await t.app.inject({
       method: 'POST',
       url: '/api/profiles',
@@ -92,6 +99,15 @@ describe('profiles & permissions', () => {
     })
     const created = events.json().events
     expect(created.some((e: any) => e.payload.name === 'Mom')).toBe(true)
+
+    // Back to the default for the rest of the suite.
+    const restore = await t.app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: asProfile(parent.id),
+      payload: { open_profile_creation: true },
+    })
+    expect(restore.statusCode).toBe(200)
   })
 
   it('role changes take effect immediately on the next request [PRO-003]', async () => {
@@ -133,10 +149,12 @@ describe('profiles & permissions', () => {
   })
 
   it('parent-only routes return parent_required for kids [PRO-005] [SYS-008]', async () => {
+    // Profile CREATE is governed by PRO-009 (open by default); profile UPDATE stays
+    // parent-only unconditionally.
     for (const [method, url, payload] of [
       ['POST', '/api/destinations', { name: 'X', lat: 1, lon: 1 }],
       ['PUT', '/api/config', { stop_radius_m: 120 }],
-      ['POST', '/api/profiles', { name: 'X', role: 'kid' }],
+      ['PATCH', '/api/profiles/00000000-0000-0000-0000-000000000000', { name: 'X' }],
     ] as const) {
       const res = await t.app.inject({ method, url, headers: asProfile(kid.id), payload })
       expect(res.statusCode).toBe(403)
@@ -332,7 +350,41 @@ describe('config', () => {
       min_stop_duration_min: 10,
       arrival_radius_m: 800,
       city_radius_km: 10,
+      open_profile_creation: true, // covers: CFG-006
     })
+  })
+
+  it('open_profile_creation is boolean-validated and parent-togglable [CFG-006] [CFG-002]', async () => {
+    // Non-boolean values are rejected without applying anything.
+    const bad = await t.app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: asProfile(parent.id),
+      payload: { open_profile_creation: 42 },
+    })
+    expect(bad.statusCode).toBe(400)
+    expect(bad.json().error.code).toBe('validation')
+
+    const off = await t.app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: asProfile(parent.id),
+      payload: { open_profile_creation: false },
+    })
+    expect(off.statusCode).toBe(200)
+    expect(off.json().open_profile_creation).toBe(false)
+
+    const read = await t.app.inject({ method: 'GET', url: '/api/config', headers: asProfile(kid.id) })
+    expect(read.json().open_profile_creation).toBe(false)
+
+    // Back to the default so the rest of the suite sees open creation.
+    const on = await t.app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: asProfile(parent.id),
+      payload: { open_profile_creation: true },
+    })
+    expect(on.json().open_profile_creation).toBe(true)
   })
 
   it('rejects unknown keys and out-of-bounds values atomically [CFG-002] [API-002]', async () => {
