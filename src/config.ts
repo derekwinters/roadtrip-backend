@@ -8,7 +8,11 @@ export interface AppConfig {
   min_stop_duration_min: number
   arrival_radius_m: number
   city_radius_km: number
+  open_profile_creation: boolean
 }
+
+/** Numeric tunables, bounded below; boolean flags are typed by BOOLEAN_KEYS (CFG-006). */
+type NumericConfigKey = Exclude<keyof AppConfig, 'open_profile_creation'>
 
 export const CONFIG_DEFAULTS: AppConfig = {
   ping_interval_s: 300,
@@ -16,15 +20,18 @@ export const CONFIG_DEFAULTS: AppConfig = {
   min_stop_duration_min: 10,
   arrival_radius_m: 800,
   city_radius_km: 10,
+  open_profile_creation: true,
 }
 
-export const CONFIG_BOUNDS: Record<keyof AppConfig, [number, number]> = {
+export const CONFIG_BOUNDS: Record<NumericConfigKey, [number, number]> = {
   ping_interval_s: [5, 3600],
   stop_radius_m: [20, 1000],
   min_stop_duration_min: [1, 240],
   arrival_radius_m: [100, 5000],
   city_radius_km: [1, 50],
 }
+
+const BOOLEAN_KEYS = new Set<keyof AppConfig>(['open_profile_creation'])
 
 /** Seeds any missing keys with defaults; self-heals on boot (CFG-005). */
 export async function seedConfigDefaults(db: Db): Promise<void> {
@@ -40,7 +47,12 @@ export async function getConfig(db: Db): Promise<AppConfig> {
   const { rows } = await db.query('SELECT key, value FROM config')
   const cfg = { ...CONFIG_DEFAULTS }
   for (const row of rows) {
-    if (row.key in cfg) (cfg as Record<string, number>)[row.key] = Number(row.value)
+    if (!(row.key in cfg)) continue
+    const out = cfg as Record<string, number | boolean>
+    // JSONB scalars come back typed; tolerate legacy stringified values either way.
+    out[row.key] = BOOLEAN_KEYS.has(row.key as keyof AppConfig)
+      ? row.value === true || row.value === 'true'
+      : Number(row.value)
   }
   return cfg
 }
@@ -50,11 +62,16 @@ export async function getConfig(db: Db): Promise<AppConfig> {
  * without applying anything when any entry is invalid (CFG-002).
  */
 export function validateConfigPatch(patch: Record<string, unknown>): Partial<AppConfig> {
-  const out: Record<string, number> = {}
+  const out: Record<string, number | boolean> = {}
   const entries = Object.entries(patch)
   if (entries.length === 0) throw validation('Empty config update')
   for (const [key, raw] of entries) {
-    const bounds = CONFIG_BOUNDS[key as keyof AppConfig]
+    if (BOOLEAN_KEYS.has(key as keyof AppConfig)) {
+      if (typeof raw !== 'boolean') throw validation(`${key} must be a boolean`)
+      out[key] = raw
+      continue
+    }
+    const bounds = CONFIG_BOUNDS[key as NumericConfigKey]
     if (!bounds) throw validation(`Unknown config key: ${key}`)
     const value = typeof raw === 'number' ? raw : NaN
     if (!Number.isFinite(value) || value < bounds[0] || value > bounds[1]) {
