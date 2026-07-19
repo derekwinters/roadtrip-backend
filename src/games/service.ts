@@ -175,7 +175,10 @@ export async function makeMove(app: FastifyInstance, byId: string, id: string, m
 
     const state = engine.apply(game.state, byId, move)
     const moveNo = game.move_count + 1
-    await emit(client, 'game.move', byId, { game_id: id, move_no: moveNo, move })
+    // Engines may normalize the recorded move (e.g. checkers adds captured squares for
+    // replay clients, GAME-011); re-applying it must be state-equivalent (GAME-006).
+    const recorded = engine.record ? engine.record(game.state, byId, move) : move
+    await emit(client, 'game.move', byId, { game_id: id, move_no: moveNo, move: recorded })
 
     const status = engine.status(state)
     if (status.phase === 'ongoing') {

@@ -19,9 +19,14 @@ import type { BaseState, GameEngine } from '../types.js'
 
 export type CheckersCell = { p: 0 | 1; k: boolean } | null
 
+/**
+ * A move on the wire uses the same algebraic square notation as chess (GAME-011): each of
+ * `from`/`to` matches `^[a-h][1-8]$`. The internal board is `[row][col]` with the mapping
+ * `file = 'a' + col`, `rank = row + 1` (so `a1 = [0,0]`, `h8 = [7,7]`).
+ */
 export interface CheckersMove {
-  from: [number, number]
-  to: [number, number]
+  from: string
+  to: string
 }
 
 export interface CheckersState extends BaseState {
@@ -32,8 +37,20 @@ export interface CheckersState extends BaseState {
   quietPlies: number
 }
 
-const coord = z.tuple([z.number().int().min(0).max(7), z.number().int().min(0).max(7)])
-const moveSchema = z.object({ from: coord, to: coord })
+const square = z.string().regex(/^[a-h][1-8]$/)
+// Non-strict: extra keys on a recorded move (e.g. `captured`) are stripped on re-apply,
+// keeping the fold deterministic (GAME-006).
+const moveSchema = z.object({ from: square, to: square })
+
+/** Algebraic square → internal [row, col]: `col = file - 'a'`, `row = rank - 1`. */
+export function squareToRC(sq: string): [number, number] {
+  return [sq.charCodeAt(1) - 49, sq.charCodeAt(0) - 97]
+}
+
+/** Internal [row, col] → algebraic square: `file = 'a' + col`, `rank = row + 1`. */
+export function rcToSquare(r: number, c: number): string {
+  return String.fromCharCode(97 + c) + String.fromCharCode(49 + r)
+}
 
 const QUIET_PLY_DRAW_LIMIT = 40
 
@@ -133,8 +150,9 @@ export const checkers: GameEngine<CheckersState, CheckersMove> = {
     if (!state.players.includes(by)) return { ok: false, reason: 'not a player in this game' }
     if (by !== state.turn) return { ok: false, reason: 'not your turn' }
     const parsed = moveSchema.safeParse(move)
-    if (!parsed.success) return { ok: false, reason: 'move must be { from: [r,c], to: [r,c] } with 0..7 coordinates' }
-    const { from, to } = parsed.data
+    if (!parsed.success) return { ok: false, reason: 'move must be { from: "a3", to: "b4" } algebraic squares' }
+    const from = squareToRC(parsed.data.from)
+    const to = squareToRC(parsed.data.to)
     const me = state.players.indexOf(by) as 0 | 1
     const piece = at(state.board, from[0], from[1])
     if (!piece || piece.p !== me) return { ok: false, reason: 'no piece of yours on the from square' }
@@ -176,7 +194,9 @@ export const checkers: GameEngine<CheckersState, CheckersMove> = {
   },
 
   apply(state, by, move) {
-    const { from, to } = moveSchema.parse(move)
+    const parsed = moveSchema.parse(move)
+    const from = squareToRC(parsed.from)
+    const to = squareToRC(parsed.to)
     const me = state.players.indexOf(by) as 0 | 1
     const board = state.board.map((row) => row.slice())
     const piece = { ...board[from[0]]![from[1]]! }
@@ -218,5 +238,22 @@ export const checkers: GameEngine<CheckersState, CheckersMove> = {
       must_continue_from: state.continuation,
       quiet_plies: state.quietPlies,
     }
+  },
+
+  /**
+   * Normalizes the recorded `game.move` to `{ from, to, captured? }` (GAME-011). A jump is
+   * two ranks/files, so it removes exactly the piece on the midpoint square; `captured`
+   * carries that algebraic square so replay clients can render captures. Non-captures omit
+   * it. `from`/`to` are already validated squares. Crowning is inferred by the client from
+   * the destination rank, so it is not duplicated here.
+   */
+  record(_state, _by, move) {
+    const { from, to } = moveSchema.parse(move)
+    const [fr, fc] = squareToRC(from)
+    const [tr, tc] = squareToRC(to)
+    if (Math.abs(tr - fr) === 2) {
+      return { from, to, captured: [rcToSquare((fr + tr) / 2, (fc + tc) / 2)] }
+    }
+    return { from, to }
   },
 }
