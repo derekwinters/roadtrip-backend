@@ -80,6 +80,7 @@ describe('geocode address search proxy', () => {
     expect(res.statusCode).toBe(200)
     const matches = res.json()
     expect(Array.isArray(matches)).toBe(true)
+    expect(res.json()).not.toHaveProperty('results') // bare array, never a {results:[…]} envelope [GSR-002]
     expect(matches).toHaveLength(5) // stub returned 7; response is capped
     expect(matches).toEqual(SEVEN_MATCHES.slice(0, 5))
     for (const m of matches) {
