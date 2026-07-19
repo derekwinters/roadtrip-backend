@@ -214,6 +214,24 @@ describe('moves', () => {
     expect(finished.payload).toMatchObject({ result: 'draw', move_count: 9 })
     expect(finished.payload.winner_profile_id).toBeUndefined()
   })
+
+  it('checkers accepts algebraic moves and records captured squares in game.move [GAME-011]', async () => {
+    const created = await createGame(dad.id, { game_type: 'checkers', mode: 'open' })
+    const id = created.json().id
+    expect((await join(sam.id, id)).statusCode).toBe(200)
+
+    expect((await move(dad.id, id, { from: 'a3', to: 'b4' })).statusCode).toBe(200)
+    expect((await move(sam.id, id, { from: 'd6', to: 'c5' })).statusCode).toBe(200)
+    // b4 jumps the man on c5 to land on d6 — a forced capture.
+    expect((await move(dad.id, id, { from: 'b4', to: 'd6' })).statusCode).toBe(200)
+
+    const moves = (await gameEvents(id, alex.id)).events.filter((e) => e.type === 'game.move')
+    expect(moves.map((e) => e.payload.move)).toEqual([
+      { from: 'a3', to: 'b4' },
+      { from: 'd6', to: 'c5' },
+      { from: 'b4', to: 'd6', captured: ['c5'] },
+    ])
+  })
 })
 
 describe('views and streams', () => {

@@ -26,13 +26,36 @@ interface GameEngine<S, M> {
   apply(state: S, by: ProfileId, move: M): S
   status(state: S): { phase: 'ongoing' } | { phase: 'draw' } | { phase: 'won'; winner: ProfileId }
   view(state: S, viewer?: ProfileId): unknown   // hides hangman's word from the guesser
+  record?(state: S, by: ProfileId, move: M): unknown  // normalized move for the game.move event
 }
 ```
 
 - Chess uses **chess.js** for legality, check(mate), stalemate, and draw rules; moves are
   `{from,to,promotion?}`.
 - Checkers: American rules — 8×8, dark squares, forced captures, multi-jumps, kings; draw when
-  a position repeats 3× or 40 moves pass without a capture or man advance.
+  a position repeats 3× or 40 moves pass without a capture or man advance. Moves are
+  `{from,to}` in the same algebraic square notation as chess (below); a jump is a single
+  `game.move` and the recorded event also carries the captured square(s).
+
+### Move coordinate representation (grid games)
+
+Both grid games — **chess and checkers** — use the **same algebraic square notation** so a
+single client move shape works for both (`{ from, to }`, each matching `^[a-h][1-8]$`). Files
+`a`–`h` run left→right, ranks `1`–`8` bottom→top. Internally checkers keeps its board as a
+`[row][col]` array (`row`, `col` = `0..7`); the mapping is **`file = 'a' + col`,
+`rank = row + 1`** (so `[0,0] = a1`, `[7,7] = h8`). Play is on the dark squares, which on the
+standard board (matching the Android client) are those where `(row + col)` is **even** — so
+`a1` is dark. The creator (player 0) sets up on ranks 1–3
+(`a1, c1, e1, g1 / b2, d2, f2, h2 / a3, c3, e3, g3`)
+and advances toward rank 8; player 1 sets up on ranks 6–8 and advances toward rank 1; a man is
+crowned on reaching the opponent's back rank (rank 8 for player 0, rank 1 for player 1).
+
+The recorded `game.move` payload for checkers is normalized to
+`{ from, to, captured? }`, where `captured` is the array of algebraic square(s) removed by the
+move (present only for capturing moves; a single jump removes one square). This lets replay
+clients render captures and infer crownings from the destination rank without re-deriving the
+board. Re-applying a recorded move ignores `captured` (it is re-derived from the position), so
+the fold stays deterministic (GAME-006).
 - Tic-tac-toe: 3×3, X = creator.
 - Ultimate tic-tac-toe: 9 sub-boards; a move dictates the opponent's next sub-board; won
   sub-boards form the macro board; a full sub-board without a winner counts for neither side;
@@ -61,7 +84,7 @@ interface GameEngine<S, M> {
 | GAME-008 | `GET /api/games/{id}` returns current state via the engine `view` (turn, board/display state, players, status); `GET /api/games/{id}/events` returns the ordered move stream for replay with play/pause/step performed client-side. | auto |
 | GAME-009 | Spectating = polling `GET /api/games/{id}/events?after=<seq>&wait=<s>`: a third client long-polling the stream observes every move of a live game in order. | auto |
 | GAME-010 | Chess legality, check/checkmate/stalemate and draw detection come from chess.js; the engine never accepts a move chess.js rejects. | auto |
-| GAME-011 | Checkers enforces forced captures and multi-jump continuation; kings move/capture backwards. | auto |
+| GAME-011 | Checkers enforces forced captures and multi-jump continuation; kings move/capture backwards. Moves use algebraic `{from,to}` squares (as chess), converted to the internal `[row][col]` board (`file='a'+col`, `rank=row+1`); the recorded `game.move` is normalized to `{from,to,captured?}` with the captured algebraic square(s), and crowning happens at the opponent's back rank. | auto |
 | GAME-012 | Ultimate tic-tac-toe enforces the dictated-sub-board rule including the free-choice case for decided/full boards. | auto |
 | GAME-013 | Hangman validates the word against the dictionary by default; `ignore_dictionary` skips it; length/word-count caps are always enforced (GAME word rules above). | auto |
 | GAME-014 | Hangman phrases display word boundaries: unguessed letters are masked but spaces are visible in the guesser's view; the setter's word is never present in the guesser/spectator view payload while ongoing, and the event feeds redact the word from `game.created` payloads until the game finishes. | auto |

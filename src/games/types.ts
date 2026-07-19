@@ -15,6 +15,13 @@ export interface GameEngine<S, M> {
   apply(state: S, by: ProfileId, move: M): S
   status(state: S): { phase: 'ongoing' } | { phase: 'draw' } | { phase: 'won'; winner: ProfileId }
   view(state: S, viewer?: ProfileId): unknown // hides hangman's word from the guesser
+  /**
+   * Optional: normalize a validated move into the payload recorded in its `game.move`
+   * event. Defaults to the raw submitted move. Checkers uses this to record the captured
+   * square(s) so replay clients can render captures (GAME-011); re-applying the recorded
+   * move must reproduce the same state (GAME-006), so any added fields are advisory only.
+   */
+  record?(state: S, by: ProfileId, move: M): unknown
 }
 
 /**
