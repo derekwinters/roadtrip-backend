@@ -236,7 +236,8 @@ describe('leg summaries & trip summary', () => {
     expect(s.states_count).toBe(1)
     expect(s.stop_count).toBe(2) // the still-open arrival stop at D2 does not count yet
     expect(s.games_played).toBe(3)
-    expect(s.wins_by_profile).toEqual({ [parent.id]: 2, [kid.id]: 1 })
-    expect(s.journal_posts_by_profile).toEqual({ [kid.id]: 2, [parent.id]: 1 })
+    // Per-person breakdowns are no longer computed or emitted (SUM-002).
+    expect(s).not.toHaveProperty('wins_by_profile')
+    expect(s).not.toHaveProperty('journal_posts_by_profile')
   })
 })

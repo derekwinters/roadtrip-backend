@@ -14,8 +14,6 @@ export interface TripSummary {
   states_count: number
   stop_count: number
   games_played: number
-  wins_by_profile: Record<string, number>
-  journal_posts_by_profile: Record<string, number>
 }
 
 export async function computeTripSummary(db: Db, tripId: string | null): Promise<TripSummary> {
@@ -61,30 +59,6 @@ export async function computeTripSummary(db: Db, tripId: string | null): Promise
     ).rows[0].n,
   )
 
-  const winsByProfile: Record<string, number> = {}
-  for (const row of (
-    await db.query(
-      `SELECT payload->>'winner_profile_id' AS profile_id, COUNT(*)::int AS n
-       FROM events
-       WHERE type = 'game.finished' AND payload->>'winner_profile_id' IS NOT NULL ${eventCond}
-       GROUP BY 1`,
-      args,
-    )
-  ).rows) {
-    winsByProfile[row.profile_id] = Number(row.n)
-  }
-
-  const postsByProfile: Record<string, number> = {}
-  for (const row of (
-    await db.query(
-      `SELECT actor_id, COUNT(*)::int AS n FROM events
-       WHERE type = 'journal.post' AND actor_id IS NOT NULL ${eventCond} GROUP BY actor_id`,
-      args,
-    )
-  ).rows) {
-    postsByProfile[row.actor_id] = Number(row.n)
-  }
-
   let miles: number
   if (scoped) {
     // Per-trip mileage is the haversine sum over the trip's own breadcrumb (LOC-007).
@@ -106,7 +80,5 @@ export async function computeTripSummary(db: Db, tripId: string | null): Promise
     states_count: statesCount,
     stop_count: Number(stopAgg.n),
     games_played: gamesPlayed,
-    wins_by_profile: winsByProfile,
-    journal_posts_by_profile: postsByProfile,
   }
 }

@@ -86,7 +86,8 @@ describe('simulated multi-leg day (through the real API)', () => {
     expect(trip.games_played).toBe(leg1.summary.games_played + leg2.summary.games_played + 1)
     const statesUnion = new Set([...leg1.summary.states, ...leg2.summary.states])
     expect(trip.states_count).toBe(statesUnion.size)
-    expect(trip.wins_by_profile).toEqual({ [h.parent.id]: 2, [kid.id]: 1 })
-    expect(trip.journal_posts_by_profile).toEqual({})
+    // Per-person breakdowns are no longer computed or emitted (SUM-002).
+    expect(trip).not.toHaveProperty('wins_by_profile')
+    expect(trip).not.toHaveProperty('journal_posts_by_profile')
   })
 })

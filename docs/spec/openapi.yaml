@@ -784,8 +784,6 @@ components:
         states_count: { type: integer }
         stop_count: { type: integer }
         games_played: { type: integer }
-        wins_by_profile: { type: object, additionalProperties: { type: integer } }
-        journal_posts_by_profile: { type: object, additionalProperties: { type: integer } }
     BingoCell:
       type: object
       required: [state_code, spotted_at]
