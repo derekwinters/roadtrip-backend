@@ -34,6 +34,11 @@ export function deriveNotifications(
       continue
     }
 
+    // NOTIF-003/004 — game results never notify (only challenges do, NOTIF-002). They
+    // still render in the journal feed via renderJournalEntry; this only skips the
+    // notification derivation.
+    if (ev.type === 'game.finished') continue
+
     // NOTIF-003/004 — journal activity notifies everyone but the actor. Derived events
     // (crossings, arrivals, stops) are actorless, so they notify every profile.
     // Everything else (pings, moves, config/admin) never notifies (NOTIF-004).
@@ -41,7 +46,6 @@ export function deriveNotifications(
     const entry = renderJournalEntry(ev, profilesById)
     if (!entry) continue // non-journal type or short stop
     const item: NotificationItem = { seq: ev.seq, kind: 'journal_activity', text: entry.text }
-    if (ev.type === 'game.finished') item.game_id = payload.game_id
     if (entry.link) item.link = entry.link
     items.push(item)
   }

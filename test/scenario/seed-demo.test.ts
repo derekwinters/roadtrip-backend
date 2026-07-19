@@ -42,7 +42,8 @@ describe('demo trip seed', () => {
     const trip = (await get('/api/trip/summary')).json()
     expect(trip.miles).toBeGreaterThan(80)
     expect(trip.games_played).toBeGreaterThanOrEqual(2)
-    expect(Object.keys(trip.wins_by_profile).length).toBeGreaterThan(0)
+    // Per-person breakdowns are no longer emitted (SUM-002).
+    expect(trip).not.toHaveProperty('wins_by_profile')
 
     const games = (await get('/api/games')).json()
     expect(games.length).toBe(3)

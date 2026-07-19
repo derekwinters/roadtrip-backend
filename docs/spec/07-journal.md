@@ -45,5 +45,5 @@ Every journal entry carries a **deep link** descriptor so clients can navigate t
 | ID | Requirement | Verify |
 |----|-------------|--------|
 | SUM-001 | `GET /api/legs` lists completed legs with their `trip.leg.arrived` summaries; `GET /api/legs/{destination_id}` returns one. | auto |
-| SUM-002 | `GET /api/trip/summary` aggregates the trip in scope from events (default scope per TRIP-007; the whole stream when no trips exist): total miles, wall/moving hours, states count, journal-worthy stops, games played, wins per profile, and journal post counts per profile. | auto |
+| SUM-002 | `GET /api/trip/summary` aggregates the trip in scope from events (default scope per TRIP-007; the whole stream when no trips exist): total miles, wall/moving hours, states count, journal-worthy stops, and games played. No per-person breakdowns (no per-profile wins or journal-post counts) are computed or emitted. | auto |
 | SUM-003 | Trip summary equals the sum of its parts: totals match the per-leg summaries plus the in-progress leg (verified against a simulated multi-leg trip). | auto |

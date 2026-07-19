@@ -170,9 +170,10 @@ describe('multi-trip simulation', () => {
     expect(Math.abs(b.miles - refB) / refB).toBeLessThan(0.005)
     expect(b.states_count).toBe(2)
 
-    // The between-trips post belongs to no trip: readable unscoped, counted nowhere.
-    expect(a.journal_posts_by_profile).toEqual({})
-    expect(b.journal_posts_by_profile).toEqual({})
+    // The between-trips post belongs to no trip: readable unscoped, counted in no trip.
+    // Per-person breakdowns are no longer emitted (SUM-002).
+    expect(a).not.toHaveProperty('journal_posts_by_profile')
+    expect(b).not.toHaveProperty('journal_posts_by_profile')
     const posts = (await getJson('/api/events?types=journal.post')).events
     expect(posts).toHaveLength(1)
     expect(posts[0].trip_id).toBeNull()

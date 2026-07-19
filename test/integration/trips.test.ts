@@ -73,7 +73,9 @@ describe('trip lifecycle', () => {
     const journal = await getJson(t, kid.id, '/api/journal')
     expect(journal.entries.map((e: any) => e.text)).toContain('pre-trip note')
     const summary = await getJson(t, kid.id, '/api/trip/summary')
-    expect(summary.journal_posts_by_profile).toEqual({ [kid.id]: 1 })
+    // Per-person breakdowns are no longer emitted (SUM-002); the unscoped summary still aggregates.
+    expect(summary).not.toHaveProperty('journal_posts_by_profile')
+    expect(summary).toHaveProperty('games_played')
   })
 
   it('starts a trip: parent-only, default name, 409 while one is active [TRIP-001]', async () => {
@@ -223,7 +225,8 @@ describe('event-to-trip association', () => {
     const dflt = (await getJson(t, kid.id, '/api/journal')).entries
     expect(dflt.map((e: any) => e.seq).sort()).toEqual(scoped.map((e: any) => e.seq).sort())
     const summary = await getJson(t, kid.id, '/api/trip/summary')
-    expect(summary.journal_posts_by_profile).toEqual({ [kid.id]: 2 })
+    // Per-person breakdowns are no longer emitted (SUM-002).
+    expect(summary).not.toHaveProperty('journal_posts_by_profile')
   })
 })
 
@@ -388,13 +391,14 @@ describe('trip-scoped read models & summaries', () => {
 
     expect(a.states_count).toBe(1)
     expect(a.games_played).toBe(1)
-    expect(a.wins_by_profile).toEqual({ [parent.id]: 1 })
-    expect(a.journal_posts_by_profile).toEqual({ [kid.id]: 1 })
+    // Per-person breakdowns are no longer computed or emitted (SUM-002).
+    expect(a).not.toHaveProperty('wins_by_profile')
+    expect(a).not.toHaveProperty('journal_posts_by_profile')
 
     expect(b.states_count).toBe(2)
     expect(b.games_played).toBe(1)
-    expect(b.wins_by_profile).toEqual({ [kid.id]: 1 })
-    expect(b.journal_posts_by_profile).toEqual({ [kid.id]: 1 })
+    expect(b).not.toHaveProperty('wins_by_profile')
+    expect(b).not.toHaveProperty('journal_posts_by_profile')
 
     // Partition: scoped counts sum to the unscoped stream totals; the between-trips
     // post counts toward no trip at all.

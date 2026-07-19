@@ -35,6 +35,6 @@ decision), for **both** triggers: challenge received and journal activity.
 |----|-------------|--------|
 | NOTIF-001 | `GET /api/notifications?after=<seq>` (profile from header) returns notification items derived from events after the cursor, each with kind, text, related ids, and the event `seq` for cursor advance. | auto |
 | NOTIF-002 | A `game.created` challenge inviting profile P yields a `challenge_received` notification for P only. | auto |
-| NOTIF-003 | A `journal.post` by profile A yields a `journal_activity` notification for every profile except A. | auto |
-| NOTIF-004 | Automatic journal events (state crossings, leg arrivals, journal-worthy stops, game results) yield `journal_activity` notifications for all profiles except the actor (if any); non-journal events (pings, moves) never notify. | auto |
+| NOTIF-003 | A `journal.post` by profile A yields a `journal_activity` notification for every profile except A. Only challenges notify for games (NOTIF-002); game results (`game.finished`) never raise a notification. | auto |
+| NOTIF-004 | Automatic journal events (state crossings, leg arrivals, journal-worthy stops) yield `journal_activity` notifications for all profiles except the actor (if any); non-journal events (pings, moves) never notify. Game results (`game.finished`) still appear in the journal feed but are excluded from notifications — only game challenges (NOTIF-002) notify for games. | auto |
 | NOTIF-005 | The endpoint supports `wait` long-polling like the events feed so foreground clients can surface notifications within seconds. | auto |
