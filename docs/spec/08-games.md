@@ -62,6 +62,27 @@ the fold stays deterministic (GAME-006).
   if the dictated sub-board is decided/full, the player may choose any open sub-board.
 - Hangman: asymmetric — the **creator sets the word/phrase** at creation; the joiner guesses
   letters; 6 wrong guesses lose (win for setter), completing the phrase wins for the guesser.
+  The setter never takes a turn.
+
+### Hangman end-game / resignation asymmetry (GAME-018)
+
+Consistent with "the setter never takes a turn", ending a hangman game is also asymmetric, and
+deliberately differs from the symmetric-game resign rule (GAME-015):
+
+- **The guesser (`players[1]`) cannot end the game.** A resign request from the guesser is
+  rejected with **403 forbidden** ("only the word setter can end this hangman game") and the game
+  stays `active`. There is no "concede" for the guesser — the only ways the guessing side ends is
+  by solving the word (guesser wins) or running out of guesses (setter wins) via normal moves.
+- **Only the setter/creator (`players[0]`) can end a hangman game, and doing so ABANDONS it.**
+  The setter is ending their own puzzle, so nobody wins: `status = 'abandoned'`,
+  `result = 'abandoned'`, `winner_id = null`, and a `game.abandoned` event is emitted (this is
+  **not** a guesser win). Abandonment is not a game result, so it produces no `game_result`
+  journal entry.
+
+> Product decision (2026-07): this asymmetry is intentional (roadtrip-backend#77 /
+> roadtrip-android#82). A guesser conceding would otherwise hand the setter a "win" for a puzzle
+> the family never finished; instead the shared puzzle can only be torn down by the person who
+> built it. Revisit here if the desired affordance changes.
 
 ### Hangman word rules (from design doc)
 
@@ -88,6 +109,7 @@ the fold stays deterministic (GAME-006).
 | GAME-012 | Ultimate tic-tac-toe enforces the dictated-sub-board rule including the free-choice case for decided/full boards. | auto |
 | GAME-013 | Hangman validates the word against the dictionary by default; `ignore_dictionary` skips it; length/word-count caps are always enforced (GAME word rules above). | auto |
 | GAME-014 | Hangman phrases display word boundaries: unguessed letters are masked but spaces are visible in the guesser's view; the setter's word is never present in the guesser/spectator view payload while ongoing, and the event feeds redact the word from `game.created` payloads until the game finishes. | auto |
-| GAME-015 | Resigning ends the game as a win for the opponent (`game.finished`, result "win", journal entry says "resigned"). | auto |
+| GAME-015 | For symmetric games, resigning ends the game as a win for the opponent (`game.finished`, result "win", journal entry says "resigned"). Hangman is asymmetric and follows GAME-018 instead. | auto |
 | GAME-016 | A challenge creates a notification-feed item for the invited profile (see NOTIF-002). | auto |
 | GAME-017 | Tic-tac-toe detects wins on rows/columns/diagonals and draws on a full board. | auto |
+| GAME-018 | Hangman resignation is asymmetric (see below): the guesser cannot end the game — a resign from the guesser gets 403 and leaves the game active; only the setter/creator can end a hangman game, which **abandons** it (`status`/`result` = "abandoned", `winner_id` null, `game.abandoned` emitted) rather than producing a winner. | auto |

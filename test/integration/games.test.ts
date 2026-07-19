@@ -399,6 +399,42 @@ describe('resign and notifications', () => {
     expect(again.statusCode).toBe(409)
   })
 
+  it('a hangman guesser cannot end the game; a resign gets 403 and the game stays active [GAME-018]', async () => {
+    const created = await createGame(dad.id, { game_type: 'hangman', mode: 'open', options: { word: 'banana' } })
+    const id = created.json().id
+    await join(sam.id, id) // dad = setter (players[0]), sam = guesser (players[1])
+
+    const res = await t.app.inject({ method: 'POST', url: `/api/games/${id}/resign`, headers: asProfile(sam.id) })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe('forbidden')
+
+    const game = (await t.app.inject({ method: 'GET', url: `/api/games/${id}`, headers: asProfile(sam.id) })).json()
+    expect(game).toMatchObject({ status: 'active', result: null, winner_id: null })
+
+    const { events } = await gameEvents(id, alex.id)
+    expect(events.some((e) => e.type === 'game.finished' || e.type === 'game.abandoned')).toBe(false)
+  })
+
+  it('a hangman setter ending the game abandons it with no winner and emits game.abandoned [GAME-018]', async () => {
+    const created = await createGame(dad.id, { game_type: 'hangman', mode: 'open', options: { word: 'banana' } })
+    const id = created.json().id
+    await join(sam.id, id) // dad = setter (players[0])
+
+    const res = await t.app.inject({ method: 'POST', url: `/api/games/${id}/resign`, headers: asProfile(dad.id) })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ status: 'abandoned', result: 'abandoned', winner_id: null })
+
+    const { events } = await gameEvents(id, alex.id)
+    const abandoned = events.find((e) => e.type === 'game.abandoned')
+    expect(abandoned).toBeTruthy()
+    expect(abandoned.payload).toMatchObject({ game_id: id, by_profile_id: dad.id })
+    expect(events.some((e) => e.type === 'game.finished')).toBe(false)
+
+    // Already-ended game can't be resigned again.
+    const again = await t.app.inject({ method: 'POST', url: `/api/games/${id}/resign`, headers: asProfile(dad.id) })
+    expect(again.statusCode).toBe(409)
+  })
+
   it('challenges record the invited profile in game.created for notification derivation [GAME-016]', async () => {
     const created = await createGame(dad.id, {
       game_type: 'chess',

@@ -488,10 +488,16 @@ paths:
   /api/games/{id}/resign:
     post:
       tags: [games]
-      summary: Resign; opponent wins (GAME-015)
+      summary: Resign — opponent wins (GAME-015). Hangman is asymmetric (GAME-018)
+      description: >-
+        For symmetric games the caller resigns and the opponent wins (GAME-015). For hangman
+        (GAME-018) only the setter/creator may end the game and doing so abandons it (status/result
+        "abandoned", no winner, `game.abandoned` emitted); a resign from the guesser is rejected 403.
       parameters: [{ $ref: '#/components/parameters/Id' }]
       responses:
-        '200': { description: Game finished, content: { application/json: { schema: { $ref: '#/components/schemas/Game' } } } }
+        '200': { description: Game finished or (hangman setter) abandoned, content: { application/json: { schema: { $ref: '#/components/schemas/Game' } } } }
+        '403': { description: 'Not a player, or the hangman guesser cannot end the game (GAME-018)' }
+        '409': { description: Game is not active }
 
   /api/games/{id}/events:
     get:
