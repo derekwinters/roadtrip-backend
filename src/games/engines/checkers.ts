@@ -3,7 +3,8 @@ import type { BaseState, GameEngine } from '../types.js'
 
 /**
  * Checkers, American rules (GAME-011): 8×8 board, play on dark squares only
- * ((r + c) % 2 === 1), captures are forced, multi-jumps continue with the same piece,
+ * ((r + c) % 2 === 0, so a1 = [0,0] is dark — standard board, matching the Android client),
+ * captures are forced, multi-jumps continue with the same piece,
  * kings move and capture backwards, men only forwards (including captures).
  *
  * Orientation: player 0 (the creator) starts on rows 0..2 and moves down (+r);
@@ -137,7 +138,7 @@ export const checkers: GameEngine<CheckersState, CheckersMove> = {
     const board: CheckersCell[][] = Array.from({ length: 8 }, () => Array<CheckersCell>(8).fill(null))
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
-        if ((r + c) % 2 !== 1) continue
+        if ((r + c) % 2 !== 0) continue
         if (r <= 2) board[r]![c] = { p: 0, k: false }
         else if (r >= 5) board[r]![c] = { p: 1, k: false }
       }
@@ -157,7 +158,7 @@ export const checkers: GameEngine<CheckersState, CheckersMove> = {
     const piece = at(state.board, from[0], from[1])
     if (!piece || piece.p !== me) return { ok: false, reason: 'no piece of yours on the from square' }
     if (at(state.board, to[0], to[1]) !== null) return { ok: false, reason: 'destination square is occupied' }
-    if ((to[0] + to[1]) % 2 !== 1) return { ok: false, reason: 'play stays on the dark squares' }
+    if ((to[0] + to[1]) % 2 !== 0) return { ok: false, reason: 'play stays on the dark squares' }
 
     const dr = to[0] - from[0]
     const dc = to[1] - from[1]

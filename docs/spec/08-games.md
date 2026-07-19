@@ -43,7 +43,10 @@ Both grid games — **chess and checkers** — use the **same algebraic square n
 single client move shape works for both (`{ from, to }`, each matching `^[a-h][1-8]$`). Files
 `a`–`h` run left→right, ranks `1`–`8` bottom→top. Internally checkers keeps its board as a
 `[row][col]` array (`row`, `col` = `0..7`); the mapping is **`file = 'a' + col`,
-`rank = row + 1`** (so `[0,0] = a1`, `[7,7] = h8`). The creator (player 0) sets up on ranks 1–3
+`rank = row + 1`** (so `[0,0] = a1`, `[7,7] = h8`). Play is on the dark squares, which on the
+standard board (matching the Android client) are those where `(row + col)` is **even** — so
+`a1` is dark. The creator (player 0) sets up on ranks 1–3
+(`a1, c1, e1, g1 / b2, d2, f2, h2 / a3, c3, e3, g3`)
 and advances toward rank 8; player 1 sets up on ranks 6–8 and advances toward rank 1; a man is
 crowned on reaching the opponent's back rank (rank 8 for player 0, rank 1 for player 1).
 

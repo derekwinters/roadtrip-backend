@@ -99,10 +99,10 @@ describe('replay determinism (pure fold) per game type', () => {
       'checkers',
       undefined,
       [
-        [creator.id, { from: 'b3', to: 'c4' }],
-        [joiner.id, { from: 'e6', to: 'd5' }],
-        [creator.id, { from: 'c4', to: 'e6' }], // forced capture (jumps d5)
-        [joiner.id, { from: 'f7', to: 'd5' }], // forced recapture (jumps e6)
+        [creator.id, { from: 'a3', to: 'b4' }],
+        [joiner.id, { from: 'd6', to: 'c5' }],
+        [creator.id, { from: 'b4', to: 'd6' }], // forced capture (jumps c5)
+        [joiner.id, { from: 'c7', to: 'e5' }], // forced recapture (jumps d6)
       ],
       { resignBy: creator.id },
     )
