@@ -835,5 +835,6 @@ components:
         winner_id: { type: string, format: uuid, nullable: true }
         turn: { type: string, format: uuid, nullable: true, description: whose move it is }
         view: { description: engine view for the requesting profile (GAME-008/014) }
+        hangman_display: { type: string, description: "hangman only (GAME-019); viewerless masked board (guessed letters revealed, unguessed as '_', spaces preserved) for lobby summaries, present on both list and get once the game has folded state; never leaks an unguessed letter while ongoing; absent for non-hangman or open-with-no-state games" }
         created_at: { type: string, format: date-time }
         finished_at: { type: string, format: date-time, nullable: true }

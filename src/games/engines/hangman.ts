@@ -92,6 +92,17 @@ function revealed(state: HangmanState): boolean {
   return [...state.word].every((ch) => ch === ' ' || state.guessed.includes(ch))
 }
 
+/**
+ * The masked board (GAME-014/019): guessed letters revealed, unguessed letters as `_`,
+ * spaces preserved as word boundaries. Pure and viewerless — it NEVER contains an
+ * unguessed letter, so it is always safe to expose (including in viewerless list
+ * summaries). This is the single source of the `view.display` string and the
+ * `hangman_display` lobby-summary field.
+ */
+export function hangmanDisplay(state: HangmanState): string {
+  return [...state.word].map((ch) => (ch === ' ' ? ' ' : state.guessed.includes(ch) ? ch : '_')).join('')
+}
+
 export const hangman: GameEngine<HangmanState, HangmanMove> = {
   init(options, players) {
     const checked = validateHangmanOptions(options)
@@ -134,9 +145,7 @@ export const hangman: GameEngine<HangmanState, HangmanMove> = {
     const finished = hangman.status(state).phase !== 'ongoing'
     // GAME-014: unguessed letters are masked, spaces stay visible; the word itself is
     // only present for the setter — or for everyone once the game is over.
-    const display = [...state.word]
-      .map((ch) => (ch === ' ' ? ' ' : state.guessed.includes(ch) ? ch : '_'))
-      .join('')
+    const display = hangmanDisplay(state)
     return {
       display,
       guessed: state.guessed,

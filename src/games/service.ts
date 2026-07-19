@@ -5,7 +5,7 @@ import { appendEvent } from '../events/store.js'
 import { validateEventPayload } from '../events/schemas.js'
 import { AppError, conflict, forbidden, notFound, validation } from '../errors.js'
 import { getEngine, type GameType } from './registry.js'
-import { validateHangmanOptions } from './engines/hangman.js'
+import { validateHangmanOptions, hangmanDisplay, type HangmanState } from './engines/hangman.js'
 import type { BaseState } from './types.js'
 
 /**
@@ -64,6 +64,13 @@ export function toWire(row: GameRow, viewer?: string, includeView = true): Recor
     winner_id: row.winner_id,
     turn: row.status === 'active' && row.state ? row.state.turn : null,
     view: includeView && row.state ? getEngine(row.game_type).view(row.state, viewer) : null,
+    // GAME-019: viewerless masked hangman board for lobby summaries — present on both the
+    // list (includeView=false) and get shapes. It reuses the exact `view.display` masking,
+    // so it never leaks an unguessed letter even for the setter/spectators. Omitted for
+    // non-hangman games and for open hangman games that have no folded state yet.
+    ...(row.game_type === 'hangman' && row.state
+      ? { hangman_display: hangmanDisplay(row.state as unknown as HangmanState) }
+      : {}),
     created_at: iso(row.created_at),
     finished_at: iso(row.finished_at),
   }
