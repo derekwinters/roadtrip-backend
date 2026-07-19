@@ -93,7 +93,9 @@ export async function buildApp(opts: BuildOptions): Promise<FastifyInstance> {
   await app.register(gameRoutes)
   await app.register(bingoRoutes)
   await app.register(notificationRoutes)
-  await app.register(geocodeRoutes(new GeocodeSearch(opts.pool, opts.geocode)))
+  await app.register(
+    geocodeRoutes(new GeocodeSearch(opts.pool, { logger: app.log, ...opts.geocode })),
+  )
 
   return app
 }

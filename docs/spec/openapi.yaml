@@ -557,9 +557,10 @@ paths:
     get:
       tags: [geocode]
       summary: >
-        Address search proxy (GSR-001..005). Parent-only; served from the persistent cache
+        Address search proxy (GSR-001..006). Parent-only; served from the persistent cache
         when possible, otherwise proxied to Nominatim with >=1s throttling. Best-effort
-        online — 503 when upstream is unreachable and the query is uncached.
+        online — 503 when the upstream fails and the query is uncached, with a distinct
+        error.code for unreachable vs. reached-but-erroring upstreams.
       parameters:
         - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 200 } }
       responses:
@@ -571,7 +572,10 @@ paths:
         '400': { $ref: '#/components/responses/Validation' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503':
-          description: Upstream unavailable and no cached result (error.code = geocode_unavailable)
+          description: >
+            Cache miss with a failing upstream. error.code = geocode_unavailable when the
+            upstream is unreachable/offline (GSR-004), or geocode_upstream_error when the
+            upstream is reached but returns an error status (GSR-006).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

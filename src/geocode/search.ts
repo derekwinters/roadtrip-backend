@@ -25,8 +25,43 @@ export const USER_AGENT = 'roadtrip-backend (self-hosted family app)'
 const DEFAULT_MIN_SPACING_MS = 1100 // just over Nominatim's absolute max of 1 req/s (GSR-005)
 const DEFAULT_TIMEOUT_MS = 5000
 
+/**
+ * Thrown by an upstream fetcher when the upstream was *reached* but answered with an error
+ * (a non-2xx HTTP status, or a 2xx with an unusable body). Carries the offending HTTP status
+ * so the failure can be signalled and logged distinctly from a genuine unreachable/offline
+ * upstream (GSR-006). A fetcher that cannot reach upstream at all throws the raw fetch error
+ * (network error / DNS failure / timeout), which is treated as `geocode_unavailable` (GSR-004).
+ */
+export class UpstreamGeocodeError extends Error {
+  constructor(
+    public readonly status: number,
+    message?: string,
+  ) {
+    super(message ?? `Upstream geocoder responded ${status}`)
+    this.name = 'UpstreamGeocodeError'
+  }
+}
+
+// GSR-004: the server could not reach the upstream at all — treat as offline.
 const geocodeUnavailable = () =>
   new AppError(503, 'geocode_unavailable', 'Address search is unavailable (upstream unreachable and query not cached)')
+
+// GSR-006: the upstream was reached but returned an error — distinct from offline, carries the status.
+const geocodeUpstreamError = (status: number) =>
+  new AppError(
+    503,
+    'geocode_upstream_error',
+    `Address search is temporarily unavailable (upstream returned HTTP ${status})`,
+  )
+
+/** Minimal structured logger (satisfied by Fastify's pino logger). Injected for diagnosability. */
+export interface GeocodeLogger {
+  warn(obj: unknown, msg: string): void
+}
+
+const consoleLogger: GeocodeLogger = {
+  warn: (obj, msg) => console.warn(msg, obj),
+}
 
 /**
  * Serializes tasks with >= minSpacingMs between successive task STARTS (GSR-005).
@@ -91,9 +126,9 @@ export function nominatimFetcher(opts: NominatimOptions = {}): UpstreamFetcher {
       headers: { 'User-Agent': userAgent },
       signal: AbortSignal.timeout(timeoutMs),
     })
-    if (!res.ok) throw new Error(`Nominatim responded ${res.status}`)
+    if (!res.ok) throw new UpstreamGeocodeError(res.status) // reached but refused (403/429/5xx) — GSR-006
     const rows = (await res.json()) as NominatimRow[]
-    if (!Array.isArray(rows)) throw new Error('Nominatim returned a non-array response')
+    if (!Array.isArray(rows)) throw new UpstreamGeocodeError(res.status, 'Nominatim returned a non-array response')
     return rows.slice(0, MAX_MATCHES).map((row) => ({
       display_name: String(row.display_name ?? ''),
       lat: Number(row.lat),
@@ -107,6 +142,8 @@ export interface GeocodeSearchOptions {
   fetcher?: UpstreamFetcher
   /** Minimum ms between upstream call starts (default 1100, GSR-005). */
   minSpacingMs?: number
+  /** Structured logger for upstream failures (default: console). Wire Fastify's log here. */
+  logger?: GeocodeLogger
 }
 
 /** Cache key normalization: trimmed, whitespace-collapsed, lower-cased (GSR-003). */
@@ -117,6 +154,7 @@ export function normalizeQuery(q: string): string {
 export class GeocodeSearch {
   private readonly fetcher: UpstreamFetcher
   private readonly queue: ThrottleQueue
+  private readonly logger: GeocodeLogger
   /** Concurrent identical queries share one upstream call (GSR-003/005). */
   private readonly inflight = new Map<string, Promise<GeocodeMatch[]>>()
 
@@ -126,6 +164,7 @@ export class GeocodeSearch {
   ) {
     this.fetcher = opts.fetcher ?? nominatimFetcher()
     this.queue = new ThrottleQueue(opts.minSpacingMs ?? DEFAULT_MIN_SPACING_MS)
+    this.logger = opts.logger ?? consoleLogger
   }
 
   async search(rawQuery: string): Promise<GeocodeMatch[]> {
@@ -150,8 +189,21 @@ export class GeocodeSearch {
     let matches: GeocodeMatch[]
     try {
       matches = (await this.fetcher(query)).slice(0, MAX_MATCHES)
-    } catch {
-      throw geocodeUnavailable() // GSR-004: fail cleanly, never cache a failure
+    } catch (err) {
+      // Never cache a failure. Distinguish egress-blocked (unreachable) from upstream-blocked
+      // (reached but refused) so operators and the client can react appropriately (GSR-004/006).
+      if (err instanceof UpstreamGeocodeError) {
+        this.logger.warn(
+          { query, upstreamStatus: err.status, err: err.message },
+          'geocode upstream returned an error status',
+        )
+        throw geocodeUpstreamError(err.status) // GSR-006
+      }
+      this.logger.warn(
+        { query, err: err instanceof Error ? err.message : String(err) },
+        'geocode upstream unreachable',
+      )
+      throw geocodeUnavailable() // GSR-004
     }
     await this.db.query(
       `INSERT INTO geocode_cache (query, results, fetched_at) VALUES ($1, $2, now())
