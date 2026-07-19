@@ -32,4 +32,16 @@ describe('openapi contract', () => {
     expect([...implemented].filter((r) => !documented.has(r))).toEqual([])
     expect([...documented].filter((r) => !implemented.has(r))).toEqual([])
   })
+
+  it('GET /api/geocode 200 body stays a bare array of GeocodeMatch, never a {results} envelope [GSR-002]', async () => {
+    const doc = parse(await readFile(new URL('../../docs/spec/openapi.yaml', import.meta.url), 'utf8'))
+    const schema = doc.paths?.['/api/geocode']?.get?.responses?.['200']?.content?.['application/json']?.schema
+    expect(schema).toBeDefined()
+    // A bare top-level array — not an object envelope. Guards against a future edit that would
+    // wrap the payload (silently "fixing" a mis-parsing client while breaking the wire contract).
+    expect(schema.type).toBe('array')
+    expect(schema).not.toHaveProperty('properties') // i.e. not `type: object` with `results`
+    expect(schema.items?.$ref).toBe('#/components/schemas/GeocodeMatch')
+    expect(schema.maxItems).toBe(5)
+  })
 })

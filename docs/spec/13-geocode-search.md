@@ -69,7 +69,7 @@ egress-blocked from upstream-blocked, and the cache is never polluted with a fai
 | ID | Requirement | Verify |
 |----|-------------|--------|
 | GSR-001 | `GET /api/geocode?q=` is parent-only: kid profiles receive 403 with `error.code = "parent_required"`; missing/unknown profiles receive 401. | auto |
-| GSR-002 | The endpoint proxies the configured upstream (Nominatim search, `format=jsonv2`, `limit=5`) with the descriptive `User-Agent` `roadtrip-backend (self-hosted family app)`, returning up to 5 `{display_name, lat, lon}` matches with numeric coordinates. | auto |
+| GSR-002 | The endpoint proxies the configured upstream (Nominatim search, `format=jsonv2`, `limit=5`) with the descriptive `User-Agent` `roadtrip-backend (self-hosted family app)`, returning up to 5 `{display_name, lat, lon}` matches with numeric coordinates. The `200` body is a **bare top-level JSON array** of matches (never wrapped in an object such as `{ "results": [...] }`); an empty result set is `[]`. | auto |
 | GSR-003 | Identical queries (after trim/whitespace-collapse/lower-case normalization) are served from the persistent `geocode_cache` table without re-calling upstream; the cache survives server restarts and keeps serving after connectivity loss. | auto |
 | GSR-004 | A cache miss where the upstream is *unreachable* (the fetch throws — network error, DNS failure, connection refused, or timeout) returns 503 with `error.code = "geocode_unavailable"`; the underlying error is logged and the cache is not polluted. | auto |
 | GSR-005 | Upstream calls are throttled to ≥ 1 s start-to-start spacing (Nominatim policy); concurrent requests queue for the single upstream slot rather than calling upstream in parallel. | auto |
