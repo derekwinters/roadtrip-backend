@@ -19,6 +19,12 @@ from config (`05-config.md`).
   it is re-evaluated for the whole life of the stop (not only at the opening ping), a
   destination that becomes active while the vehicle is *already* parked within range still
   arrives (LOC-012).
+- **Manual leg end** — a safety net for when automatic arrival never fires: a parent can
+  mark the active destination arrived at the request time via `POST /api/trip/leg/end`
+  (LOC-013). Unlike an automatic arrival it is timestamped at *now* (not backdated to a
+  stop), does not consume any open stop, and does **not** auto-advance — the next leg only
+  begins when a destination is next made active (in the app's flow, when the next pin is
+  added). It records the leg summary exactly like an automatic arrival.
 - **Leg** — the span between trip start (or previous arrival) and an arrival.
 - **Trip epoch** (TRIP-006, see `12-trips.md`) — the engine scopes its accumulators to the
   trip containing the ping being processed. Leg numbering under LOC-006/LOC-009 restarts per
@@ -46,6 +52,7 @@ is not secret, the presentation differs.
 | LOC-005 | Stops shorter than `min_stop_duration_min` produce a `stop.ended` event flagged `journal_worthy=false` and are excluded from the journal and summary stop counts. | auto |
 | LOC-006 | While a stop is open, a ping within `arrival_radius_m` of the active destination emits `trip.leg.arrived` for that destination (once), marks it `arrived` (backdated to the stop's start), and activates the next pending destination. | auto |
 | LOC-012 | Arrival is re-evaluated on every ping for the duration of the open stop, not only at the opening ping: a destination that becomes the active destination while the vehicle is already stopped within `arrival_radius_m` of it arrives at that stop rather than being missed until the next stop. | auto |
+| LOC-013 | `POST /api/trip/leg/end` (parent-only, online) marks the current `active` destination `arrived` at the request time and records its leg summary, but does **not** advance — no destination is auto-activated, so the next leg only starts when a destination is next made active. Returns 409 (`conflict`, "No active leg to end") when no destination is active. The manual `trip.leg.arrived` event (actor = the parent, `manual:true`) is replayed interleaved with pings during read-model rebuild (SYS-002), so live and rebuilt legs/destinations are byte-for-byte identical. | auto |
 | LOC-007 | Trip mileage and per-leg mileage equal the haversine sum along consecutive breadcrumb pings, within 0.5% of the reference value in simulator scenarios. | auto |
 | LOC-008 | `GET /api/map` returns: latest position + its timestamp, trip start point, breadcrumb (optionally decimated via `max_points`), active destination, remaining straight-line distance to it, and leg progress (miles driven this leg). | auto |
 | LOC-009 | The leg summary payload contains: wall-clock duration, moving duration (wall minus journal-worthy stop time), miles, journal-worthy stop count, states crossed during the leg, and games finished during the leg. | auto |
