@@ -314,6 +314,17 @@ paths:
         '200': { description: Leg, content: { application/json: { schema: { $ref: '#/components/schemas/Leg' } } } }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /api/trip/leg/end:
+    post:
+      tags: [location]
+      summary: >
+        Manually end the current leg (parent only, LOC-013): mark the active destination
+        arrived now and record its leg without advancing to the next destination.
+      responses:
+        '200': { description: The arrived destination, content: { application/json: { schema: { $ref: '#/components/schemas/Destination' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { description: No active leg to end, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
   /api/trip/summary:
     get:
       tags: [location]
