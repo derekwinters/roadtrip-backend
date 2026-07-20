@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/derekwinters/roadtrip-backend/compare/v1.0.0...v1.1.0) (2026-07-20)
+
+
+### Features
+
+* **location:** manual end-leg + re-evaluate arrival while stopped ([#88](https://github.com/derekwinters/roadtrip-backend/issues/88)) ([c7edd1a](https://github.com/derekwinters/roadtrip-backend/commit/c7edd1a65f8a8c4d92aa71f534d83f2526036a61))
+
 ## 1.0.0 (2026-07-19)
 
 
