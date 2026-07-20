@@ -153,13 +153,23 @@ async function computeLegSummary(db: Db, state: EngineState, arrivedAtIso: strin
 }
 
 /**
- * LOC-006: a stop anchored within arrival_radius_m of the ACTIVE destination arrives
- * there exactly once, records the leg, and activates the next pending destination.
- * The active destination is the lowest-ordered non-arrived one of the engine's trip
- * epoch (TRIP-005/006) — identical to the reconciled `status='active'` row live, and
- * epoch-correct during rebuilds.
+ * LOC-006/LOC-012: while a stop is open, a ping within arrival_radius_m of the ACTIVE
+ * destination arrives there exactly once, records the leg, and activates the next pending
+ * destination. Distance is measured from `at` (the current ping) rather than only the stop
+ * anchor, and the check runs for every ping of the stop's life — so a destination reached
+ * after the anchor was laid down, or made active while the vehicle is already parked, still
+ * arrives instead of being missed. Arrival is still backdated to the stop's start.
+ * The active destination is the lowest-ordered non-arrived one of the engine's trip epoch
+ * (TRIP-005/006) — identical to the reconciled `status='active'` row live, and epoch-correct
+ * during rebuilds.
  */
-async function checkArrival(db: Db, cfg: AppConfig, state: EngineState, emit: Emit): Promise<void> {
+async function checkArrival(
+  db: Db,
+  cfg: AppConfig,
+  state: EngineState,
+  emit: Emit,
+  at: { lat: number; lon: number },
+): Promise<void> {
   const stop = state.open_stop
   if (!stop) return
   const { rows } = await db.query(
@@ -170,10 +180,7 @@ async function checkArrival(db: Db, cfg: AppConfig, state: EngineState, emit: Em
   )
   if (rows.length === 0) return
   const dest = rows[0]
-  const distance = haversineMeters(
-    { lat: stop.anchor_lat, lon: stop.anchor_lon },
-    { lat: Number(dest.lat), lon: Number(dest.lon) },
-  )
+  const distance = haversineMeters(at, { lat: Number(dest.lat), lon: Number(dest.lon) })
   if (distance > cfg.arrival_radius_m) return
 
   const arrivedAt = stop.started_at // the moment we stopped, not the confirming ping
@@ -304,7 +311,6 @@ async function processPing(
       )
       // LOC-003: the stop.started event is backdated to the first stationary ping.
       await emit('location.stop.started', { stop_id: stopId, lat: effect.anchorLat, lon: effect.anchorLon }, startedAtIso)
-      await checkArrival(db, cfg, state, emit)
     } else {
       const open = state.open_stop!
       const endedAtIso = ping.tsIso
@@ -334,6 +340,11 @@ async function processPing(
       state.open_stop = null
     }
   }
+
+  // LOC-006/LOC-012: while stopped, (re-)evaluate arrival every ping against the current
+  // position — so a destination reached after the anchor, or made active while already
+  // parked, still arrives. A ping that just ended a stop leaves open_stop null and is skipped.
+  if (state.open_stop) await checkArrival(db, cfg, state, emit, { lat: ping.lat, lon: ping.lon })
 
   state.last_ping = { lat: ping.lat, lon: ping.lon, ts: ping.tsIso }
 }
