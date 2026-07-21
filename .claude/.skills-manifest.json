@@ -1,0 +1,19 @@
+{
+  "source": "derekwinters/ai-skills",
+  "ref": "main",
+  "bundles": [
+    "core",
+    "spec"
+  ],
+  "skills": [
+    "ci-watch",
+    "validate-specs"
+  ],
+  "agents": [
+    "dev"
+  ],
+  "workflows": [
+    "skills-update.yml",
+    "docs-test.yml"
+  ]
+}

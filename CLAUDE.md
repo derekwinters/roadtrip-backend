@@ -7,7 +7,7 @@ container (see `docker-compose.yml`).
 ## Development methodology (mandatory)
 
 This project is **spec-driven** and **test-driven**. All feature/infrastructure work goes
-through the `roadtrip-dev` agent workflow defined in `.claude/agents/roadtrip-dev.md`:
+through the `dev` agent workflow defined in `.claude/agents/dev.md`:
 
 1. **Spec first** — update `docs/spec/*.md` (+ `docs/spec/openapi.yaml` for API surface).
    Every behavior has a requirement ID (`AREA-NNN`).

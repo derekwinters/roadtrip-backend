@@ -1,0 +1,90 @@
+# skills-update — "Dependabot for skills", installed INTO each consumer repo.
+#
+# Runs on a schedule inside this repo, checks derekwinters/ai-skills for the
+# latest release, renders the skills this repo subscribes to (per the central
+# registry), and opens a PR **in this repo** when anything changed. It uses this
+# repo's own GITHUB_TOKEN to open its own PR — nothing pushes in from outside.
+#
+# Reading ai-skills:
+#   - if ai-skills is public, no token is needed;
+#   - if private, add a read-only secret AI_SKILLS_READ_TOKEN (scoped to read
+#     ai-skills only). The step falls back to that when the built-in token
+#     can't reach ai-skills.
+# One repo setting is required: Settings → Actions → General →
+#   "Allow GitHub Actions to create and approve pull requests".
+name: skills-update
+
+on:
+  schedule:
+    - cron: "23 7 * * 1" # Mondays ~07:23 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Resolve latest ai-skills release (fallback main)
+        id: rel
+        env:
+          GH_TOKEN: ${{ secrets.AI_SKILLS_READ_TOKEN || github.token }}
+        run: |
+          ref=$(gh release view --repo derekwinters/ai-skills \
+                  --json tagName -q .tagName 2>/dev/null || echo main)
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Tracking ai-skills@$ref"
+
+      - name: Checkout ai-skills @ ref
+        uses: actions/checkout@v4
+        with:
+          repository: derekwinters/ai-skills
+          ref: ${{ steps.rel.outputs.ref }}
+          path: .ai-skills
+          token: ${{ secrets.AI_SKILLS_READ_TOKEN || github.token }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+
+      - name: Render subscribed skills into this repo
+        run: |
+          python .ai-skills/distribution/sync.py \
+            --registry .ai-skills/distribution/registry.yml \
+            --repo "${{ github.repository }}" \
+            --source .ai-skills \
+            --out . \
+            --ref "${{ steps.rel.outputs.ref }}"
+          rm -rf .ai-skills
+
+      - name: Open/update PR if changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Skills already up to date."
+            exit 0
+          fi
+          branch="skills/update"
+          base="${{ github.event.repository.default_branch }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add -A
+          git commit -m "chore(skills): update AI skills to ${{ steps.rel.outputs.ref }}"
+          git push -f -u origin "$branch"
+          if [ -z "$(gh pr list --head "$branch" --state open --json number -q '.[0].number')" ]; then
+            gh pr create \
+              --title "chore(skills): update AI skills to ${{ steps.rel.outputs.ref }}" \
+              --body "Automated by this repo's \`skills-update\` workflow. Source: \`derekwinters/ai-skills@${{ steps.rel.outputs.ref }}\`. Review and merge." \
+              --head "$branch" --base "$base"
+          else
+            echo "PR already open for $branch — updated in place."
+          fi
