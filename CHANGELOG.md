@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/derekwinters/roadtrip-backend/compare/v1.1.0...v1.2.0) (2026-07-21)
+
+
+### Features
+
+* **ai:** adopt shared ai-skills bundles (dev agent, skills, self-updater, pr-title-lint) ([#98](https://github.com/derekwinters/roadtrip-backend/issues/98)) ([4c971d3](https://github.com/derekwinters/roadtrip-backend/commit/4c971d33b4de0f39dfa1e09156f9cf0104d4b3cc))
+
 ## [1.1.0](https://github.com/derekwinters/roadtrip-backend/compare/v1.0.0...v1.1.0) (2026-07-20)
 
 
