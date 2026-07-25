@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout this repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Resolve latest ai-skills release (fallback main)
         id: rel
@@ -41,14 +41,14 @@ jobs:
           echo "Tracking ai-skills@$ref"
 
       - name: Checkout ai-skills @ ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: derekwinters/ai-skills
           ref: ${{ steps.rel.outputs.ref }}
           path: .ai-skills
           token: ${{ secrets.AI_SKILLS_READ_TOKEN || github.token }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6.3.0
         with:
           python-version: "3.12"
       - run: pip install pyyaml
