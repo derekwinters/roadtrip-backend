@@ -52,7 +52,7 @@ jobs:
                 gh release delete "$tag" --cleanup-tag --yes
               done
       - id: rp
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           release-type: node
 
@@ -63,7 +63,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Determine version
         id: version
         # `version` is the human-readable name used in release titles, artifact
