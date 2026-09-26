@@ -1,5 +1,9 @@
 # Grouped weekly dependency updates with a 14-day cooldown, so updates arrive as a
 # few consolidated PRs instead of a stream of singletons.
+#
+# For npm, the group only covers minor and patch updates. Major updates arrive as
+# their own individual PRs, so one breaking major upgrade can't block every
+# harmless update that would otherwise share its grouped PR.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -12,6 +16,16 @@ updates:
       npm-dependencies:
         patterns:
           - '*'
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # typescript-eslint only supports TypeScript <6.1, so TS 7 can't install yet.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # Keep the Node type definitions matching the Node 22 runtime used in CI and the Dockerfile.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: docker
     directory: /
