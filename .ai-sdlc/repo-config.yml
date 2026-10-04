@@ -1,0 +1,38 @@
+# ai-sdlc configuration for roadtrip-backend.
+# Schema: https://github.com/derekwinters/ai-sdlc/blob/main/docs/spec/configuration.md
+capabilities:
+  - hygiene
+  - consistency
+  - labels
+  - release
+  - pipeline
+
+owners:
+  - derekwinters
+
+milestone_ordering: semver
+dashboard_issue: 142
+
+commands:
+  test: npm test
+  verify: npm run validate:specs
+
+fire:
+  endpoint_secret: ROUTINE_FIRE_URL
+  token_secret: ROUTINE_FIRE_TOKEN
+
+# Which ai-sdlc skills this repository installs. `skills-update` opens a
+# pull request when one of them changes upstream, and a name removed here
+# is uninstalled on the next run.
+#
+# Seeded once by `adopt` from the capabilities above, and never touched
+# again: this list is yours. Add to it, prune it, or set it to `[]` to
+# install none — whatever is here is what a later adoption will honour.
+skills:
+  - github-api
+  - release-flow
+  - triage-issue
+  - pipeline-dev
+  - issue-blockers
+  - ci-watch
+  - milestone-ops

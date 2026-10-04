@@ -1,0 +1,38 @@
+# ai-sdlc: derekwinters/ai-sdlc@v0.4.22 hash=eb8354eded7de343
+# Managed by `adopt`. Local edits are preserved but stop this file
+# being updated — `adopt verify` will report it.
+name: gatekeeper-close
+
+# A caller. The logic is in ai-sdlc; this exists because a trigger
+# cannot be centralised — it must be declared in the repository it
+# fires for.
+#
+# Pinned to a commit rather than a tag: a tag can move, and this runs
+# with this repository's token. Upgrade with `adopt apply <version>`,
+# which rewrites both the SHA and the comment.
+#
+# Nothing is checked out here. The action is fetched by the runner,
+# outside this repository's workspace.
+
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Every writer on one issue serialises. `set_labels` replaces the whole
+  # label set rather than patching it, so two runs would read-modify-write
+  # the same list and one would silently lose.
+  group: gatekeeper-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  gatekeeper-close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: derekwinters/ai-sdlc/.github/actions/gatekeeper@cde337066fdce3b688d2f9cd83a992f048278784 # v0.4.22
+        with:
+          mode: closed

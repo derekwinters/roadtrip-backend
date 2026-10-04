@@ -7,7 +7,8 @@ container (see `docker-compose.yml`).
 ## Development methodology (mandatory)
 
 This project is **spec-driven** and **test-driven**. All feature/infrastructure work goes
-through the `dev` agent workflow defined in `.claude/agents/dev.md`:
+through ai-sdlc's `dev` agent workflow (`.claude/agents/dev.md`; shared rules in
+`.ai-sdlc/house-rules.md`, repo settings in `.ai-sdlc/repo-config.yml`):
 
 1. **Spec first** — update `docs/spec/*.md` (+ `docs/spec/openapi.yaml` for API surface).
    Every behavior has a requirement ID (`AREA-NNN`).
@@ -32,3 +33,5 @@ through the `dev` agent workflow defined in `.claude/agents/dev.md`:
 - Conventional Commits (release-please manages versioning + CHANGELOG).
 - Append-only event stream; features are producers/read-models over `events`.
 - Requirement areas: SYS, EVT, API, PRO, CFG, SYNC, LOC, GEO, GSR, JRNL, LIST, GAME, SUM, NOTIF, SIM, TRIP, BNG.
+
+@.ai-sdlc/house-rules.md
