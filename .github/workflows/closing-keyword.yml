@@ -1,7 +1,7 @@
-# ai-sdlc: derekwinters/ai-sdlc@v0.5.0 hash=c1bcf11099a8c2f7
+# ai-sdlc: derekwinters/ai-sdlc@v0.5.0 hash=c94a25ed54f96d83
 # Managed by `adopt`. Local edits are preserved but stop this file
 # being updated — `adopt verify` will report it.
-name: skills-update
+name: closing-keyword
 
 # A caller. The logic is in ai-sdlc; this exists because a trigger
 # cannot be centralised — it must be declared in the repository it
@@ -10,18 +10,19 @@ name: skills-update
 # Pinned to a commit rather than a tag: a tag can move, and this runs
 # with this repository's token. Upgrade with `adopt apply <version>`,
 # which rewrites both the SHA and the comment.
+#
+# Nothing is checked out here. The action is fetched by the runner,
+# outside this repository's workspace.
 
 on:
-  schedule:
-    - cron: "41 5 * * *"
-  workflow_dispatch:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
-  skills-update:
-    uses: derekwinters/ai-sdlc/.github/workflows/reusable-skills-update.yml@9a51041eb76254a2cd7e306ed7ac352a2cf085d6 # v0.5.0
-    with:
-      ref: 9a51041eb76254a2cd7e306ed7ac352a2cf085d6
+  closing-keyword:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: derekwinters/ai-sdlc/.github/actions/closing-keyword@9a51041eb76254a2cd7e306ed7ac352a2cf085d6 # v0.5.0

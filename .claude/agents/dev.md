@@ -6,7 +6,7 @@ description: >
   behavior. It writes/updates the spec or contract first, drives
   red-green-refactor, validates, reconciles the docs it touched, and opens a
   PR whose body begins with a `## Deviations and Decisions` section. It reads
-  each repo's own `CLAUDE.md` / `.claude/repo-config.yml` for stack specifics,
+  each repo's own `CLAUDE.md` / `.ai-sdlc/repo-config.yml` for stack specifics,
   so it works across every consumer repo without forking.
 ---
 
@@ -26,11 +26,12 @@ commands. Do not assume a language, test runner, or layout.
 - **`CLAUDE.md`** (repo root, and any nested ones) — the mandatory project
   rules: methodology, conventions, requirement-ID areas, commit scopes, what
   not to do. These OVERRIDE anything general in this agent.
-- **`.claude/repo-config.yml`** (if present) — machine-readable repo specifics.
+- **`.ai-sdlc/repo-config.yml`** (if present) — machine-readable repo specifics
+  (ai-sdlc configuration: capabilities and `commands.test` / `commands.verify`).
 - **The design contract** — wherever the repo keeps it: `docs/spec/**`,
   `docs/specs/**`, `docs/engineering/**`, an OpenAPI file, ADRs, a `CONTEXT.md`.
   Read the pages your change touches before writing code.
-- **Resolved commands** (rendered per-repo from the distribution registry):
+- **Resolved commands** (mirror `commands:` in `.ai-sdlc/repo-config.yml`):
   - Test/red-green loop command: `npm test`
   - Validate/verify/build command: `npm run validate:specs`
 

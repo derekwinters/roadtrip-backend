@@ -1,87 +1,59 @@
 ---
 name: ci-watch
-description: Poll GitHub PR checks until all complete, then report pass/fail status with log excerpts for any failures. Does not fix — callers handle resolution.
+description: Poll a pull request's checks until they complete, then report pass or fail with log excerpts for failures. Use when waiting on CI before merging, or when a check's outcome needs reading. It reports and never fixes.
+allowed-tools: Bash, Read
+github-repo: https://github.com/derekwinters/ai-sdlc
+github-ref: 9a51041eb76254a2cd7e306ed7ac352a2cf085d6
+github-path: skills/pipeline/ci-watch
+github-tree-sha: 31042581c0bd1a9ac6ce9f1c4096f637cef9f6ec
 ---
 
-<what-to-do>
+# CI watch
 
-## Invocation
+Watches a pull request's checks to completion and tells you what happened.
 
-```
-/ci-watch <pr-number>
-/ci-watch <pr-number> --timeout <polls>
-```
+**It reports; it never fixes.** No pushes, no re-runs, no label changes. A watcher that also
+repairs is one whose reports you cannot trust — a green result would no longer distinguish "the
+change was good" from "the watcher patched it".
 
-Called by orchestrators after pushing commits. Reports final status and returns control to the caller.
+## Five outcomes, and only one is good
 
-## Behavior
+| Outcome | Meaning |
+| --- | --- |
+| `passed` | every check succeeded, was skipped, or was neutral |
+| `failed` | at least one check failed, was cancelled, or timed out |
+| `timed-out` | checks were still running when the deadline or attempt cap was reached |
+| `no-checks` | the pull request has no checks at all |
+| `unreachable` | the API could not be read after repeated attempts |
 
-1. Poll `gh pr checks <pr-number>` every 30 seconds
-2. After each poll, display a compact status table
-3. Stop when all checks are non-pending (pass/fail/skipped) or timeout is reached
-4. On any failures, fetch logs and report root cause
-5. Return a structured result block for the caller
+The last three are deliberately **not** `failed` and deliberately **not** `passed`. Each is a
+different problem with a different response, and collapsing them into "failed" sends you looking
+for a bug that isn't there. Collapsing them into "passed" merges on no evidence.
 
-## Poll Table Format
+`no-checks` matters more than it looks: nothing having run is not the same as everything having
+passed.
 
-Display after each poll:
+## Cancelled counts as failed
 
-```
-CI Watch — PR #299 (poll 4, 2m00s elapsed)
-  ✅ api-contracts          pass    26s
-  ✅ backend-tests (3.11)   pass    2m24s
-  ✅ backend-tests (3.12)   pass    2m40s
-  ⏳ upgrade-regression     pending —
-  ✅ validate               pass    17s
-```
+`skipped` and `neutral` mean a check chose not to judge, so they don't fail the run. `cancelled`
+and `timed_out` are different: neither passed, and treating them as neutral hides a run somebody
+killed.
 
-## Timeout
+## Failure detail
 
-Default: 40 polls (~20 minutes). Override with `--timeout <n>`.
+Failed checks carry a **bounded excerpt from the end of the log**, which is where the failure
+usually is. Passing checks are not fetched — it costs a request and tells nobody anything. A log
+that cannot be read is reported with its reason rather than being dropped: a check missing from a
+failure report reads as a check that passed.
 
-On timeout, report last known state and return TIMEOUT result.
+**Check names are reported exactly as the API gives them** — `closing-keyword / closing-keyword`,
+not a prettified version. A name that doesn't match the API can't be used to configure a required
+check, which is the main thing you'd want it for.
 
-## Log Fetching on Failure
+## Bounds
 
-For each failing check:
+Polling stops at a deadline *and* at an attempt cap. Both, because a mis-set clock would defeat
+either one alone. The interval is configurable and defaults to something that does not hammer the
+API.
 
-```bash
-# Get job ID from the check URL
-gh api repos/<owner>/<repo>/actions/jobs/<job-id>/logs
-```
-
-Extract the last 40 lines of relevant output (skip Docker pull noise, git setup). Show the actual error message.
-
-## Result Block
-
-Always end with a structured result for the caller:
-
-```
-CI_WATCH_RESULT
-  status: PASSED | FAILED | TIMEOUT
-  pr: <number>
-  total_checks: <n>
-  passed: <n>
-  failed: <n>
-  elapsed_polls: <n>
-
-FAILURES:          (omit section if none)
-  <check-name>
-    error: <one-line root cause>
-    log_excerpt:
-      <relevant log lines>
-```
-
-## What callers should do with this result
-
-- **PASSED**: proceed (merge, finalize, etc.)
-- **FAILED**: read FAILURES section, apply fixes, push, re-invoke ci-watch
-- **TIMEOUT**: investigate runner health, re-invoke or escalate
-
-## Notes
-
-- Skip polling if no checks appear within the first 3 polls (new run may not have started yet — wait for run to register before declaring timeout)
-- Treat `skipping` status as passing (downstream jobs skipped due to unmet conditions are expected)
-- Job ID is the last path segment of the check URL: `https://github.com/.../job/79848187426` → `79848187426`
-
-</what-to-do>
+Specification: `docs/spec/ci-watch.md` (`CIW`), 23 requirements.

@@ -32,3 +32,5 @@ through the `dev` agent workflow defined in `.claude/agents/dev.md`:
 - Conventional Commits (release-please manages versioning + CHANGELOG).
 - Append-only event stream; features are producers/read-models over `events`.
 - Requirement areas: SYS, EVT, API, PRO, CFG, SYNC, LOC, GEO, GSR, JRNL, LIST, GAME, SUM, NOTIF, SIM, TRIP, BNG.
+
+@.ai-sdlc/house-rules.md

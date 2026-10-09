@@ -2,7 +2,7 @@
 
 This directory is the **system of record** for the Family Road Trip project. Code that
 contradicts these documents is a bug in one or the other, and the discrepancy must be resolved
-in the same change. See `.claude/agents/roadtrip-dev.md` for the mandatory workflow.
+in the same change. See `.claude/agents/dev.md` for the mandatory workflow.
 
 ## Product summary
 

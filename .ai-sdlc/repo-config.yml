@@ -1,0 +1,33 @@
+# ai-sdlc configuration for roadtrip-backend.
+# Schema: https://github.com/derekwinters/ai-sdlc/blob/main/docs/spec/configuration.md
+
+# hygiene     — closing-keyword check on pull requests + the shared house rules.
+# consistency — this repo is spec-driven (docs/spec requirement IDs + tests).
+# release     — release-please already manages versions and the CHANGELOG.
+# Not enabled: `labels` and `pipeline` — there is no pipeline label taxonomy
+# or dashboard issue in this repository (pipeline would require both).
+capabilities:
+  - hygiene
+  - consistency
+  - release
+
+# The same commands CLAUDE.md documents. `test` is the full Vitest suite
+# (integration tests need Postgres: ./scripts/test-db.sh); `verify` is the
+# spec/requirement/docs gate that CI also runs.
+commands:
+  test: npm test
+  verify: npm run validate:specs
+
+# Which ai-sdlc skills this repository installs. `skills-update` opens a
+# pull request when one of them changes upstream, and a name removed here
+# is uninstalled on the next run.
+#
+# Seeded once by `adopt` from the capabilities above, and never touched
+# again: this list is yours. Add to it, prune it, or set it to `[]` to
+# install none — whatever is here is what a later adoption will honour.
+skills:
+  - github-api
+  - routines
+  - release-flow
+  # Added by hand: replaces the ai-skills copy of ci-watch this repo used.
+  - ci-watch
