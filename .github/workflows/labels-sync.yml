@@ -1,7 +1,7 @@
-# ai-sdlc: derekwinters/ai-sdlc@v0.5.0 hash=c1bcf11099a8c2f7
+# ai-sdlc: derekwinters/ai-sdlc@v0.5.0 hash=5dbc3bfa9cfed439
 # Managed by `adopt`. Local edits are preserved but stop this file
 # being updated — `adopt verify` will report it.
-name: skills-update
+name: labels-sync
 
 # A caller. The logic is in ai-sdlc; this exists because a trigger
 # cannot be centralised — it must be declared in the repository it
@@ -12,16 +12,19 @@ name: skills-update
 # which rewrites both the SHA and the comment.
 
 on:
-  schedule:
-    - cron: "41 5 * * *"
+  push:
+    branches: [main]
+    paths:
+      - .github/labels.core.yml
+      - .github/labels.repo.yml
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  issues: write
 
 jobs:
-  skills-update:
-    uses: derekwinters/ai-sdlc/.github/workflows/reusable-skills-update.yml@9a51041eb76254a2cd7e306ed7ac352a2cf085d6 # v0.5.0
+  labels-sync:
+    uses: derekwinters/ai-sdlc/.github/workflows/reusable-labels-sync.yml@9a51041eb76254a2cd7e306ed7ac352a2cf085d6 # v0.5.0
     with:
       ref: 9a51041eb76254a2cd7e306ed7ac352a2cf085d6
