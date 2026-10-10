@@ -3,13 +3,22 @@
 
 # hygiene     — closing-keyword check on pull requests + the shared house rules.
 # consistency — this repo is spec-driven (docs/spec requirement IDs + tests).
+# labels      — the shared pipeline label taxonomy (.github/labels.core.yml).
 # release     — release-please already manages versions and the CHANGELOG.
-# Not enabled: `labels` and `pipeline` — there is no pipeline label taxonomy
-# or dashboard issue in this repository (pipeline would require both).
+# pipeline    — triage, gatekeeper and dashboard; requires `labels`, `owners`
+#               and `dashboard_issue` below.
 capabilities:
   - hygiene
   - consistency
+  - labels
   - release
+  - pipeline
+
+owners:
+  - derekwinters
+
+# The existing open "Pipeline dashboard" issue, reused.
+dashboard_issue: 142
 
 # The same commands CLAUDE.md documents. `test` is the full Vitest suite
 # (integration tests need Postgres: ./scripts/test-db.sh); `verify` is the
@@ -17,6 +26,12 @@ capabilities:
 commands:
   test: npm test
   verify: npm run validate:specs
+
+# Names of the repository secrets holding the triage routine's API-trigger
+# URL and token (the owner creates the secrets; only the names live here).
+fire:
+  endpoint_secret: ROUTINE_FIRE_URL
+  token_secret: ROUTINE_FIRE_TOKEN
 
 # Which ai-sdlc skills this repository installs. `skills-update` opens a
 # pull request when one of them changes upstream, and a name removed here
@@ -28,6 +43,17 @@ commands:
 skills:
   - github-api
   - routines
+  - triage-issue
+  - pipeline-dev
+  - issue-blockers
+  - milestone-ops
   - release-flow
   # Added by hand: replaces the ai-skills copy of ci-watch this repo used.
   - ci-watch
+
+# The Claude Code routines this repository wants, by definition id. The
+# `routines` skill renders them; `triage` needs the pipeline and the API
+# trigger secrets named under `fire:` above.
+routines:
+  - triage
+  - dependabot

@@ -1,0 +1,29 @@
+# ai-sdlc: derekwinters/ai-sdlc@v0.5.0 hash=267f9aea97117f31
+# Managed by `adopt`. Local edits are preserved but stop this file
+# being updated — `adopt verify` will report it.
+name: dashboard
+
+# A caller. The logic is in ai-sdlc; this exists because a trigger
+# cannot be centralised — it must be declared in the repository it
+# fires for.
+#
+# Pinned to a commit rather than a tag: a tag can move, and this runs
+# with this repository's token. Upgrade with `adopt apply <version>`,
+# which rewrites both the SHA and the comment.
+
+on:
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled, milestoned, demilestoned]
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  dashboard:
+    uses: derekwinters/ai-sdlc/.github/workflows/reusable-dashboard.yml@9a51041eb76254a2cd7e306ed7ac352a2cf085d6 # v0.5.0
+    with:
+      ref: 9a51041eb76254a2cd7e306ed7ac352a2cf085d6
