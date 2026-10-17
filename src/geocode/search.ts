@@ -1,5 +1,5 @@
 /**
- * Address search proxy (docs/spec/13-geocode-search.md, GSR-001..005).
+ * Address search proxy (docs/spec/13-geocode-search.md, GSR-001..007).
  *
  * Forward geocoding for destination planning — the single, explicitly best-effort
  * ONLINE component of the system (SYS-007 clarification in the spec). Results are
@@ -10,6 +10,7 @@
  */
 import type { Db } from '../db.js'
 import { AppError } from '../errors.js'
+import { OperationalLog } from '../oplog/log.js'
 
 export interface GeocodeMatch {
   display_name: string
@@ -144,6 +145,8 @@ export interface GeocodeSearchOptions {
   minSpacingMs?: number
   /** Structured logger for upstream failures (default: console). Wire Fastify's log here. */
   logger?: GeocodeLogger
+  /** Durable record of failures (default: the operational log over the same db, GSR-007). */
+  oplog?: Pick<OperationalLog, 'record'>
 }
 
 /** Cache key normalization: trimmed, whitespace-collapsed, lower-cased (GSR-003). */
@@ -155,6 +158,7 @@ export class GeocodeSearch {
   private readonly fetcher: UpstreamFetcher
   private readonly queue: ThrottleQueue
   private readonly logger: GeocodeLogger
+  private readonly oplog: Pick<OperationalLog, 'record'>
   /** Concurrent identical queries share one upstream call (GSR-003/005). */
   private readonly inflight = new Map<string, Promise<GeocodeMatch[]>>()
 
@@ -165,6 +169,7 @@ export class GeocodeSearch {
     this.fetcher = opts.fetcher ?? nominatimFetcher()
     this.queue = new ThrottleQueue(opts.minSpacingMs ?? DEFAULT_MIN_SPACING_MS)
     this.logger = opts.logger ?? consoleLogger
+    this.oplog = opts.oplog ?? new OperationalLog(db, this.logger)
   }
 
   async search(rawQuery: string): Promise<GeocodeMatch[]> {
@@ -197,12 +202,19 @@ export class GeocodeSearch {
           { query, upstreamStatus: err.status, err: err.message },
           'geocode upstream returned an error status',
         )
+        // GSR-007: durable record; best-effort, never alters the response (OPLOG-005).
+        await this.oplog.record({
+          source: 'geocode',
+          code: 'geocode_upstream_error',
+          detail: { query, upstream_status: err.status },
+        })
         throw geocodeUpstreamError(err.status) // GSR-006
       }
       this.logger.warn(
         { query, err: err instanceof Error ? err.message : String(err) },
         'geocode upstream unreachable',
       )
+      await this.oplog.record({ source: 'geocode', code: 'geocode_unavailable', detail: { query } }) // GSR-007
       throw geocodeUnavailable() // GSR-004
     }
     await this.db.query(
