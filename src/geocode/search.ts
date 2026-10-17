@@ -174,15 +174,20 @@ export class GeocodeSearch {
 
   async search(rawQuery: string): Promise<GeocodeMatch[]> {
     const query = normalizeQuery(rawQuery)
-    const cached = await this.readCache(query) // GSR-003: cache first, upstream never re-hit
-    if (cached) return cached
+    // Register in-flight BEFORE any await: the cache read and upstream call are one shared
+    // operation per query, so a concurrent identical query can never miss both the cache
+    // snapshot and the in-flight call (GSR-003/005).
     const existing = this.inflight.get(query)
     if (existing) return existing
-    const pending = this.queue
-      .run(() => this.fetchAndCache(query))
-      .finally(() => this.inflight.delete(query))
+    const pending = this.lookup(query).finally(() => this.inflight.delete(query))
     this.inflight.set(query, pending)
     return pending
+  }
+
+  private async lookup(query: string): Promise<GeocodeMatch[]> {
+    const cached = await this.readCache(query) // GSR-003: cache first, upstream never re-hit
+    if (cached) return cached
+    return this.queue.run(() => this.fetchAndCache(query))
   }
 
   private async readCache(query: string): Promise<GeocodeMatch[] | null> {
