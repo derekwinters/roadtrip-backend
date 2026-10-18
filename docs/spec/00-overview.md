@@ -65,7 +65,7 @@ Backend areas: **SYS** (architecture), **EVT** (event model), **API** (API conve
 **GEO** (geocoding), **GSR** (address search / geocode proxy), **JRNL** (journal),
 **LIST** (checklist), **SUM** (summaries), **GAME** (games), **NOTIF** (notifications),
 **SIM** (simulator + seed), **REL** (release engineering), **TRIP** (multiple road trips),
-**BNG** (license plate bingo).
+**BNG** (license plate bingo), **OPLOG** (operational log).
 
 Android areas are specified in `roadtrip-android/docs/spec/` and prefixed `AND*`.
 
@@ -87,3 +87,4 @@ Android areas are specified in `roadtrip-android/docs/spec/` and prefixed `AND*`
 | `12-trips.md` | Multiple road trips: parent-only start/end, per-trip history |
 | `13-geocode-search.md` | Address search proxy: parent-only, cached, throttled, best-effort online |
 | `14-bingo.md` | License plate bingo: shared per-trip card, spot/unspot sync events, standing credit |
+| `15-operational-log.md` | Opt-in durable operational log (outside `events`): geocode failure reasons, row-count retention |
