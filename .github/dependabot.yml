@@ -50,6 +50,11 @@ updates:
       docker-images:
         patterns:
           - '*'
+    ignore:
+      # Node 22 is what CI and the Dockerfile run, and Dependabot can't tell LTS from
+      # non-LTS majors, so all Node majors are ignored; a Node upgrade is a deliberate manual change.
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: docker-compose
     directory: /

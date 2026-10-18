@@ -20,4 +20,17 @@ describe('dependabot config', () => {
       )
     }
   })
+
+  it('the docker entry ignores semver-major updates of node [REL-010]', async () => {
+    const doc = parse(await readFile(new URL('../../.github/dependabot.yml', import.meta.url), 'utf8')) as {
+      updates?: Array<{
+        'package-ecosystem': string
+        ignore?: Array<{ 'dependency-name': string; 'update-types'?: string[] }>
+      }>
+    }
+    const docker = (doc.updates ?? []).find((e) => e['package-ecosystem'] === 'docker')
+    expect(docker).toBeDefined()
+    const rule = docker?.ignore?.find((r) => r['dependency-name'] === 'node')
+    expect(rule?.['update-types']).toEqual(expect.arrayContaining(['version-update:semver-major']))
+  })
 })
