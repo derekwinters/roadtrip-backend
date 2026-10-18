@@ -59,6 +59,33 @@ is not secret, the presentation differs.
 | LOC-010 | Out-of-order or duplicate-timestamp pings within a sync batch are processed in `client_ts` order; a ping older than the newest processed ping is folded into the breadcrumb in timestamp order but never retroactively reopens closed stops. | auto |
 | LOC-011 | GPS jitter tolerance: the ±50 m jitter simulator scenario at a 15-minute stop still yields exactly one stop (no flapping start/end pairs). | auto |
 
+## Stop labels
+
+A stop's automatic name is its `place` (GEO-006), which is null when no city is within
+`city_radius_km` and for every stop that is not journal-worthy. A parent can give **any**
+stop (journal-worthy or not, open or ended) a user-supplied **label** — "Grandma's",
+"Rest area" — through the client-originated `location.stop.labeled {stop_id, label}` event,
+uploaded through `POST /api/sync/batch` like any other offline event. The label is
+**additive**: `place` is kept and still returned; clients display `label` in preference to
+`place` when both are present. Labeling a stop that is not journal-worthy also makes it
+visible in the checklist (LIST-003), so a stop that missed a city can be found and named; it
+does **not** make the stop journal-worthy (JRNL-004 and LOC-005 are unchanged).
+
+Invariants:
+
+- Never mutate or drop `place`, `journal_worthy`, or any stored `location.stop.*` event when a
+  label is set — the label lives only in `location.stop.labeled` events and is folded in at read time.
+- Resolve a stop's current label as the `location.stop.labeled` event for that `stop_id` with the
+  greatest `client_ts` (ties broken by `seq`) — never by upload order.
+- Never truncate an over-length label; reject it.
+
+| ID | Requirement | Verify |
+|----|-------------|--------|
+| LOC-014 | `location.stop.labeled {stop_id, label}` is accepted through `POST /api/sync/batch` from parent profiles and stored as an append-only event with its real `client_ts`; a kid profile's label event is rejected per-event with reason `not_parent` and not persisted (as EVT-005). | auto |
+| LOC-015 | The label is trimmed before it is stored; a label that is empty after trimming, or longer than `stop_label_max_chars` (config, CFG-008) after trimming, is rejected per-event (`rejected`, reason `label must not be blank` / `label_too_long`) and not persisted. | auto |
+| LOC-016 | A `location.stop.labeled` whose `stop_id` names no stop in the stops read model is rejected per-event with reason `unknown_stop` and not persisted. | auto |
+| LOC-017 | The stops read model exposes a stop's current label as `label` next to `place`: re-labeling the same `stop_id` is last-write-wins by `client_ts` (ties by `seq`), so a late-synced older label never overwrites a newer one; `place` is returned unchanged; a stop that was never labeled reads back exactly as before (no `label` field). | auto |
+
 ## Requirements — reverse geocoding (server-side, offline)
 
 Datasets bundled in the repo/image (no runtime internet): US state polygons

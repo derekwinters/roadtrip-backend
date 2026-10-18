@@ -16,6 +16,12 @@ contract follows.
 - Cursors: event feeds use the event `seq` as an exclusive `after` cursor; the journal uses
   `before` for backward pagination. Long-poll via `wait=<1..30>` seconds.
 - Idempotency: client-generated UUID `event_id` on every synced event (EVT-001).
+- Sync per-event rejection reasons: `forbidden_type` (EVT-004), `not_parent` (EVT-005,
+  LOC-014), `unknown_stop` and `label_too_long` (LOC-015/016), or the payload validation
+  message (SYNC-004). A rejected event is never persisted.
+- Stop entries in `GET /api/checklist` (`ChecklistStopEntry`) carry `stop_id`, `place`
+  (auto-derived nearest city, nullable) and, only when a parent has labeled the stop, an
+  optional `label` string, which clients display in preference to `place` (LOC-017, LIST-003).
 
 ## Endpoint inventory
 

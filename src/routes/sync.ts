@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { requireProfile } from '../auth.js'
-import { CLIENT_EVENT_TYPES, validateEventPayload } from '../events/schemas.js'
+import { getConfig, type AppConfig } from '../config.js'
+import { CLIENT_EVENT_TYPES, PARENT_ONLY_CLIENT_TYPES, validateEventPayload } from '../events/schemas.js'
 import { appendEvent } from '../events/store.js'
 import { processNewPings } from '../location/engine.js'
 
@@ -34,6 +35,7 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
     const body = batchSchema.parse(req.body)
     const results: BatchResult[] = []
     const acceptedPingSeqs: number[] = []
+    let cfg: AppConfig | null = null // read lazily, once per batch (CFG-008)
 
     for (const ev of body.events) {
       // EVT-004 — clients may only upload the whitelisted types.
@@ -41,8 +43,8 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
         results.push({ event_id: ev.event_id, status: 'rejected', reason: 'forbidden_type' })
         continue
       }
-      // EVT-005 — pings only from parents.
-      if (ev.type === 'location.ping' && req.profile!.role !== 'parent') {
+      // EVT-005 / LOC-014 — pings and stop labels only from parents.
+      if (PARENT_ONLY_CLIENT_TYPES.has(ev.type) && req.profile!.role !== 'parent') {
         results.push({ event_id: ev.event_id, status: 'rejected', reason: 'not_parent' })
         continue
       }
@@ -51,6 +53,21 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
       if (!valid.ok) {
         results.push({ event_id: ev.event_id, status: 'rejected', reason: valid.error })
         continue
+      }
+      if (ev.type === 'location.stop.labeled') {
+        const { stop_id, label } = valid.payload as { stop_id: string; label: string }
+        cfg ??= await getConfig(app.pool)
+        // LOC-015 — over-length labels are rejected, never truncated.
+        if (label.length > cfg.stop_label_max_chars) {
+          results.push({ event_id: ev.event_id, status: 'rejected', reason: 'label_too_long' })
+          continue
+        }
+        // LOC-016 — the label must target a stop the read model knows.
+        const known = await app.pool.query('SELECT 1 FROM stops WHERE id = $1', [stop_id])
+        if ((known.rowCount ?? 0) === 0) {
+          results.push({ event_id: ev.event_id, status: 'rejected', reason: 'unknown_stop' })
+          continue
+        }
       }
       const res = await appendEvent(app.pool, {
         eventId: ev.event_id,

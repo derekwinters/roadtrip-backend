@@ -29,4 +29,18 @@ describe('event payload schemas (EVT-003)', () => {
     expect(validateEventPayload('config.updated', { changes: { ping_interval_s: 60 } }).ok).toBe(true)
     expect(validateEventPayload('config.updated', { changes: { ping_interval_s: 'x' } }).ok).toBe(false)
   })
+
+  it('location.stop.labeled trims the label and rejects blank labels or extra fields [EVT-003] [LOC-015]', () => {
+    const stop_id = nonRfcIds[0]
+    expect(validateEventPayload('location.stop.labeled', { stop_id, label: "  Grandma's  " })).toEqual({
+      ok: true,
+      payload: { stop_id, label: "Grandma's" },
+    })
+    expect(validateEventPayload('location.stop.labeled', { stop_id, label: '   ' })).toEqual({
+      ok: false,
+      error: 'label must not be blank',
+    })
+    expect(validateEventPayload('location.stop.labeled', { stop_id: 'nope', label: 'x' }).ok).toBe(false)
+    expect(validateEventPayload('location.stop.labeled', { stop_id, label: 'x', place: 'y' }).ok).toBe(false)
+  })
 })

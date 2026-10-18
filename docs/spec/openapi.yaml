@@ -216,7 +216,11 @@ paths:
                       properties:
                         event_id: { type: string, format: uuid }
                         status: { enum: [accepted, duplicate, rejected] }
-                        reason: { type: string }
+                        reason:
+                          type: string
+                          description: >-
+                            Present when rejected: forbidden_type (EVT-004), not_parent (EVT-005, LOC-014),
+                            unknown_stop / label_too_long (LOC-015/016), or the payload validation message.
                         seq: { type: integer }
 
   /api/events:
@@ -285,7 +289,11 @@ paths:
   /api/checklist:
     get:
       tags: [location]
-      summary: States/cities/stops checklist (LIST-001), scoped per trip (TRIP-007)
+      summary: States/cities/stops checklist (LIST-001/003), scoped per trip (TRIP-007)
+      description: >-
+        Stops are the ended stops that are journal-worthy or carry a user label (LIST-001/003).
+        Each stop has `stop_id` (the target of a `location.stop.labeled` event) and, when labeled,
+        `label`, which clients display in preference to `place` (LOC-017).
       parameters:
         - { $ref: '#/components/parameters/TripScope' }
       responses:
@@ -678,6 +686,7 @@ components:
         arrival_radius_m: { type: number }
         city_radius_km: { type: number }
         operational_log_max_rows: { type: integer }
+        stop_label_max_chars: { type: integer }
         open_profile_creation: { type: boolean }
     ConfigPatch:
       type: object
@@ -689,6 +698,7 @@ components:
         arrival_radius_m: { type: number, minimum: 100, maximum: 5000 }
         city_radius_km: { type: number, minimum: 1, maximum: 50 }
         operational_log_max_rows: { type: integer, minimum: 1, maximum: 100000 }
+        stop_label_max_chars: { type: integer, minimum: 1, maximum: 2000 }
         open_profile_creation: { type: boolean }
     Destination:
       type: object
@@ -706,9 +716,13 @@ components:
       required: [event_id, type, client_ts, payload]
       properties:
         event_id: { type: string, format: uuid }
-        type: { enum: [location.ping, journal.post, plate.spotted, plate.unspotted] }
+        type: { enum: [location.ping, journal.post, plate.spotted, plate.unspotted, location.stop.labeled] }
         client_ts: { type: string, format: date-time }
-        payload: { type: object }
+        payload:
+          type: object
+          description: >-
+            Type-specific body (02-event-model.md). location.stop.labeled is parent-only and carries
+            {stop_id: uuid, label: string}; label is trimmed and must be 1..stop_label_max_chars long (LOC-014..016).
     Event:
       type: object
       required: [seq, event_id, type, payload, client_ts, server_ts]
@@ -776,7 +790,22 @@ components:
           items: { type: object, properties: { city: {type: string}, state_code: {type: string}, first_at: {type: string, format: date-time} } }
         stops:
           type: array
-          items: { type: object, properties: { lat: {type: number}, lon: {type: number}, started_at: {type: string}, duration_min: {type: number}, place: {type: string, nullable: true} } }
+          items: { $ref: '#/components/schemas/ChecklistStopEntry' }
+    ChecklistStopEntry:
+      type: object
+      required: [stop_id, lat, lon, started_at, duration_min, place]
+      properties:
+        stop_id: { type: string, format: uuid, description: target of location.stop.labeled (LIST-003) }
+        lat: { type: number }
+        lon: { type: number }
+        started_at: { type: string, format: date-time }
+        duration_min: { type: number }
+        place: { type: string, nullable: true, description: auto-derived nearest city (GEO-006) }
+        label:
+          type: string
+          description: >-
+            User-supplied name (LOC-017); present only when the stop has been labeled. Display it in
+            preference to place.
     LegSummary:
       type: object
       required: [wall_minutes, moving_minutes, miles, stop_count, states, games_played]

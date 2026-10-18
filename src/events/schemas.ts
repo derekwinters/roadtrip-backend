@@ -28,6 +28,10 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
   'journal.post': z.object({ text: z.string().trim().min(1).max(2000) }).strict(),
   'plate.spotted': platePayload,
   'plate.unspotted': platePayload,
+  // LOC-014/015: trimmed and non-blank here; the length cap is runtime config, checked at sync.
+  'location.stop.labeled': z
+    .object({ stop_id: uuid, label: z.string().trim().min(1, 'label must not be blank') })
+    .strict(),
 
   'location.stop.started': z.object({ stop_id: uuid, lat: z.number(), lon: z.number() }).strict(),
   'location.stop.ended': z
@@ -117,8 +121,17 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
     .strict(),
 }
 
-/** The only types clients may upload through sync (EVT-004; plate.* per BNG-001). */
-export const CLIENT_EVENT_TYPES = new Set(['location.ping', 'journal.post', 'plate.spotted', 'plate.unspotted'])
+/** The only types clients may upload through sync (EVT-004; plate.* per BNG-001; stop labels per LOC-014). */
+export const CLIENT_EVENT_TYPES = new Set([
+  'location.ping',
+  'journal.post',
+  'plate.spotted',
+  'plate.unspotted',
+  'location.stop.labeled',
+])
+
+/** Client types only parent profiles may upload (EVT-005, LOC-014). */
+export const PARENT_ONLY_CLIENT_TYPES = new Set(['location.ping', 'location.stop.labeled'])
 
 export function validateEventPayload(
   type: string,
