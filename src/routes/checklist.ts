@@ -8,9 +8,9 @@ const querySchema = z.object({ trip: z.guid().optional() })
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : v)
 
 /**
- * LIST-001/002: states driven through (first-entered timestamp), cities passed, and
- * journal-worthy stops — all derived from crossing/stop data of the event stream,
- * scoped to the trip in scope (TRIP-007; unscoped when no trips exist).
+ * LIST-001/002/003: states driven through (first-entered timestamp), cities passed, and
+ * ended stops that are journal-worthy or labeled — all derived from crossing/stop/label data
+ * of the event stream, scoped to the trip in scope (TRIP-007; unscoped when no trips exist).
  */
 export async function checklistRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/checklist', { preHandler: [requireProfile] }, async (req) => {
@@ -19,6 +19,7 @@ export async function checklistRoutes(app: FastifyInstance): Promise<void> {
     const args = scope !== null ? [scope] : []
     const eventCond = scope !== null ? 'AND trip_id = $1' : ''
     const rowCond = scope !== null ? 'AND trip_id = $1' : ''
+    const stopCond = scope !== null ? 'AND s.trip_id = $1' : ''
 
     // LIST-002: one row per state, keyed on the FIRST crossing even after re-entries.
     const { rows: stateRows } = await app.pool.query(
@@ -42,17 +43,28 @@ export async function checklistRoutes(app: FastifyInstance): Promise<void> {
       first_at: iso(r.first_at),
     }))
 
+    // LOC-017: a stop's current label is its latest location.stop.labeled by client_ts (ties by
+    // seq), folded in at read time; place and the stop row are never touched.
     const { rows: stopRows } = await app.pool.query(
-      `SELECT anchor_lat, anchor_lon, started_at, duration_min, place
-       FROM stops WHERE journal_worthy = TRUE ${rowCond} ORDER BY started_at`,
+      `SELECT s.id, s.anchor_lat, s.anchor_lon, s.started_at, s.duration_min, s.place, l.label
+       FROM stops s
+       LEFT JOIN (
+         SELECT DISTINCT ON (payload->>'stop_id') payload->>'stop_id' AS stop_id, payload->>'label' AS label
+         FROM events WHERE type = 'location.stop.labeled'
+         ORDER BY payload->>'stop_id', client_ts DESC, seq DESC
+       ) l ON l.stop_id = s.id::text
+       WHERE s.ended_at IS NOT NULL AND (s.journal_worthy = TRUE OR l.label IS NOT NULL) ${stopCond}
+       ORDER BY s.started_at`,
       args,
     )
     const stops = stopRows.map((r: any) => ({
+      stop_id: r.id as string,
       lat: Number(r.anchor_lat),
       lon: Number(r.anchor_lon),
       started_at: iso(r.started_at),
       duration_min: Number(r.duration_min),
       place: r.place ?? null,
+      ...(r.label !== null ? { label: r.label as string } : {}), // LOC-017: absent when never labeled
     }))
 
     return { states, cities, stops }

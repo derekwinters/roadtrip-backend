@@ -9,6 +9,7 @@ export interface AppConfig {
   arrival_radius_m: number
   city_radius_km: number
   operational_log_max_rows: number
+  stop_label_max_chars: number
   open_profile_creation: boolean
 }
 
@@ -22,6 +23,7 @@ export const CONFIG_DEFAULTS: AppConfig = {
   arrival_radius_m: 800,
   city_radius_km: 10,
   operational_log_max_rows: 1000,
+  stop_label_max_chars: 80,
   open_profile_creation: true,
 }
 
@@ -32,12 +34,13 @@ export const CONFIG_BOUNDS: Record<NumericConfigKey, [number, number]> = {
   arrival_radius_m: [100, 5000],
   city_radius_km: [1, 50],
   operational_log_max_rows: [1, 100000],
+  stop_label_max_chars: [1, 2000],
 }
 
 const BOOLEAN_KEYS = new Set<keyof AppConfig>(['open_profile_creation'])
 
-/** Numeric keys that must be whole numbers (CFG-007). */
-const INTEGER_KEYS = new Set<keyof AppConfig>(['operational_log_max_rows'])
+/** Numeric keys that must be whole numbers (CFG-007, CFG-008). */
+const INTEGER_KEYS = new Set<keyof AppConfig>(['operational_log_max_rows', 'stop_label_max_chars'])
 
 /** Seeds any missing keys with defaults; self-heals on boot (CFG-005). */
 export async function seedConfigDefaults(db: Db): Promise<void> {

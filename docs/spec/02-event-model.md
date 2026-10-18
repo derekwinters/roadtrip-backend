@@ -24,6 +24,7 @@ Client-originated (accepted via sync batch or dedicated endpoints):
 | `journal.post` | `{text}` (1–2000 chars) | any profile |
 | `plate.spotted` | `{state_code}` (bundled US states + DC + Canadian provinces/territories) | any profile (license plate bingo, see 14-bingo.md) |
 | `plate.unspotted` | `{state_code}` (bundled US states + DC + Canadian provinces/territories) | any profile (license plate bingo, see 14-bingo.md) |
+| `location.stop.labeled` | `{stop_id, label}` — `label` trimmed, 1..`stop_label_max_chars` chars; `stop_id` must name a known stop | parent profiles only (stop labels, see 06-location.md LOC-014..017) |
 
 Server-derived (never accepted from clients):
 
@@ -56,7 +57,7 @@ Game events are recorded by the game endpoints (online-only actions); `location.
 | EVT-001 | Inserting an event with an `event_id` that already exists is a no-op reported as `duplicate`; the stored event is unchanged (idempotent sync retries). | auto |
 | EVT-002 | `seq` is strictly increasing and unique across all events; clients can use `after=seq` as an exclusive cursor and never miss or double-receive an event. | auto |
 | EVT-003 | Every event type in this catalog has a Zod payload schema; events with malformed payloads are rejected with a 400 and are not persisted. | auto |
-| EVT-004 | Client-originated types are limited to the catalog above (`location.ping`, `journal.post`, `plate.spotted`, `plate.unspotted`) via sync; attempts to sync server-derived types are rejected per-event as `rejected` with reason `forbidden_type`. | auto |
+| EVT-004 | Client-originated types are limited to the five in the catalog above (`location.ping`, `journal.post`, `plate.spotted`, `plate.unspotted`, `location.stop.labeled`) via sync; attempts to sync server-derived types are rejected per-event as `rejected` with reason `forbidden_type`. | auto |
 | EVT-005 | `location.ping` events are only accepted from profiles with the parent role; kid profiles get per-event `rejected` with reason `not_parent`. | auto |
 | EVT-006 | Events preserve `client_ts` as supplied and record independent `server_ts`; journal ordering uses `client_ts` (see JRNL-002). | auto |
 | EVT-007 | `GET /api/events?after=<seq>&limit=<n>&types=<csv>` returns events in `seq` order, filtered by type when given, with `next_after` cursor. | auto |

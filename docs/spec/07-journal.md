@@ -37,8 +37,9 @@ Every journal entry carries a **deep link** descriptor so clients can navigate t
 
 | ID | Requirement | Verify |
 |----|-------------|--------|
-| LIST-001 | `GET /api/checklist` returns states driven through (with first-entered timestamp), cities passed, and journal-worthy stops, all derived from crossing/stop events. | auto |
+| LIST-001 | `GET /api/checklist` returns states driven through (with first-entered timestamp), cities passed, and the ended stops that are journal-worthy **or carry a label** (LOC-017), all derived from crossing/stop/label events. | auto |
 | LIST-002 | States appear once each regardless of re-entry count; `first_entered_at` is the first crossing's timestamp. | auto |
+| LIST-003 | Each checklist stop entry carries its `stop_id` (the id a `location.stop.labeled` event targets) and, when the stop is labeled, `label` alongside `place`. A stop that is not journal-worthy appears in the checklist once it is labeled and does not appear without a label; labeling it never adds it to `GET /api/journal` or to summary stop counts (JRNL-004, LOC-005, SUM-002 unchanged). | auto |
 
 ## Summaries
 
