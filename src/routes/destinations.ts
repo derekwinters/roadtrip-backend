@@ -18,7 +18,7 @@ const createSchema = z
 const updateSchema = createSchema.partial()
 
 // TRIP-014: ?trip=<id> targets a specific trip's destination list (staging a planned trip).
-const tripQuerySchema = z.object({ trip: z.string().uuid().optional() })
+const tripQuerySchema = z.object({ trip: z.guid().optional() })
 
 /** Loads a trip row for ?trip= targeting; unknown ids are 404 (TRIP-014). */
 async function loadTrip(db: Db, id: string): Promise<{ id: string; status: string }> {
@@ -127,7 +127,7 @@ export async function destinationRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.patch('/api/destinations/:id', { preHandler: [requireParent] }, async (req) => {
-    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const { id } = z.object({ id: z.guid() }).parse(req.params)
     const q = tripQuerySchema.parse(req.query)
     const body = updateSchema.parse(req.body)
     await loadDestination(app.pool, id, q.trip)
@@ -154,7 +154,7 @@ export async function destinationRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.delete('/api/destinations/:id', { preHandler: [requireParent] }, async (req, reply) => {
-    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const { id } = z.object({ id: z.guid() }).parse(req.params)
     const q = tripQuerySchema.parse(req.query)
     const row = await loadDestination(app.pool, id, q.trip)
     if (row.status === 'arrived') throw conflict('conflict', 'Cannot remove an arrived destination')

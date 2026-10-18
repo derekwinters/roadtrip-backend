@@ -96,7 +96,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.patch('/api/profiles/:id', { preHandler: [requireParent] }, async (req) => {
-    const { id } = z.object({ id: z.string().uuid() }).parse(req.params)
+    const { id } = z.object({ id: z.guid() }).parse(req.params)
     const body = updateSchema.parse(req.body)
     const { rows } = await app.pool.query(
       `UPDATE profiles SET

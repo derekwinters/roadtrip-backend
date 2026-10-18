@@ -4,7 +4,7 @@ import { requireProfile } from '../auth.js'
 import { foldBingoCard, type BingoProfile } from '../bingo/card.js'
 import { resolveTripScope } from '../trips/scope.js'
 
-const querySchema = z.object({ trip: z.string().uuid().optional() })
+const querySchema = z.object({ trip: z.guid().optional() })
 
 /** License Plate Bingo read model (docs/spec/14-bingo.md, BNG-004). */
 export async function bingoRoutes(app: FastifyInstance): Promise<void> {

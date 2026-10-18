@@ -11,7 +11,7 @@ const batchSchema = z
     events: z
       .array(
         z.object({
-          event_id: z.string().uuid(),
+          event_id: z.guid(),
           type: z.string(),
           client_ts: z.string().datetime({ offset: true }),
           payload: z.unknown(),

@@ -29,7 +29,7 @@ function toWire(row: any) {
  */
 export async function legRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/legs', { preHandler: [requireProfile] }, async (req) => {
-    const q = z.object({ trip: z.string().uuid().optional() }).parse(req.query)
+    const q = z.object({ trip: z.guid().optional() }).parse(req.query)
     const scope = await resolveTripScope(app.pool, q.trip)
     const { rows } = await app.pool.query(
       scope !== null
@@ -41,7 +41,7 @@ export async function legRoutes(app: FastifyInstance): Promise<void> {
   })
 
   app.get('/api/legs/:destinationId', { preHandler: [requireProfile] }, async (req) => {
-    const { destinationId } = z.object({ destinationId: z.string().uuid() }).parse(req.params)
+    const { destinationId } = z.object({ destinationId: z.guid() }).parse(req.params)
     const { rows } = await app.pool.query(`${LEG_SELECT} WHERE l.destination_id = $1`, [destinationId])
     if (rows.length === 0) throw notFound('Leg')
     return toWire(rows[0])

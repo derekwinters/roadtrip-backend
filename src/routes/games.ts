@@ -17,20 +17,20 @@ import {
 
 /** GAME-001..017 game platform routes. OWNER: games feature. */
 
-const idParams = z.object({ id: z.string().uuid() })
+const idParams = z.object({ id: z.guid() })
 
 const createSchema = z
   .object({
     game_type: z.enum(GAME_TYPES),
     mode: z.enum(['open', 'challenge']),
-    invited_profile_id: z.string().uuid().optional(),
-    options: z.record(z.unknown()).optional(),
+    invited_profile_id: z.guid().optional(),
+    options: z.record(z.string(), z.unknown()).optional(),
   })
   .strict()
 
 const listQuerySchema = z.object({
   status: z.enum(['open', 'active', 'finished', 'abandoned']).optional(),
-  profile: z.string().uuid().optional(),
+  profile: z.guid().optional(),
 })
 
 const streamQuerySchema = z.object({

@@ -5,7 +5,7 @@ import { endActiveLeg } from '../location/engine.js'
 import { resolveTripScope } from '../trips/scope.js'
 import { computeTripSummary } from '../trips/summary.js'
 
-const querySchema = z.object({ trip: z.string().uuid().optional() })
+const querySchema = z.object({ trip: z.guid().optional() })
 
 /**
  * SUM-002: aggregation for the trip in scope. The scope is ?trip=<id>, else the active
