@@ -146,10 +146,14 @@ describe('multi-trip simulation', () => {
     const listA = await getJson(`/api/checklist?trip=${tripA.id}`)
     expect(listA.states.map((s: any) => s.state_code)).toEqual(['CO'])
     expect(listA.cities.map((c: any) => c.city)).toContain('Fort Collins')
+    expect(listA.cities.map((c: any) => c.city)).toContain('Loveland')
+    expect(listA.cities.map((c: any) => c.city)).not.toContain('Cheyenne')
     const listB = await getJson(`/api/checklist?trip=${tripB.id}`)
     expect(listB.states.map((s: any) => s.state_code)).toEqual(['CO', 'WY'])
     expect(listB.cities.map((c: any) => c.city)).toContain('Cheyenne')
-    expect(listB.cities.map((c: any) => c.city)).not.toContain('Fort Collins')
+    // Trip B's I-25 drive passes Fort Collins within city_radius_km itself (GEO-004), so
+    // isolation is checked on a city only trip A's route has as its nearest: Loveland.
+    expect(listB.cities.map((c: any) => c.city)).not.toContain('Loveland')
 
     const legsA = await getJson(`/api/legs?trip=${tripA.id}`)
     expect(legsA).toHaveLength(1)

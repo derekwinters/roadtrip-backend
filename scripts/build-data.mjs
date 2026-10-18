@@ -2,7 +2,8 @@
 /**
  * Regenerates the bundled offline geo/dictionary datasets (GEO-001..006, GAME-013):
  *   data/us-states.geojson — state polygons from us-atlas (TopoJSON → GeoJSON)
- *   data/us-cities.json    — US cities ≥ 20k population from all-the-cities
+ *   data/us-cities.json    — every US place from all-the-cities (no population cutoff;
+ *                            city_min_population filters at runtime, GEO-009)
  *   data/words.txt         — hangman dictionary from word-list (3..15 letter words)
  * Committed outputs; rerun only when upgrading the source packages.
  */
@@ -41,7 +42,7 @@ console.log(`us-states.geojson: ${fc.features.length} states`)
 // --- cities ---------------------------------------------------------------
 const cities = require('all-the-cities')
 const us = cities
-  .filter((c) => c.country === 'US' && c.population >= 20000 && FIPS_TO_USPS_HAS(c.adminCode))
+  .filter((c) => c.country === 'US' && FIPS_TO_USPS_HAS(c.adminCode))
   .map((c) => ({
     city: c.name,
     state_code: c.adminCode,
