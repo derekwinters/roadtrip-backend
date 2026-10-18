@@ -4,10 +4,19 @@
 # For npm, the group only covers minor and patch updates. Major updates arrive as
 # their own individual PRs, so one breaking major upgrade can't block every
 # harmless update that would otherwise share its grouped PR.
+#
+# Every entry labels its PRs `no-closing-keyword` (REL-009): Dependabot PRs close no
+# issue, and the label is what lets them pass the closing-keyword check. Setting
+# `labels:` replaces Dependabot's default labels, so each list also keeps
+# `dependencies` and the ecosystem label Dependabot would otherwise apply.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    labels:
+      - dependencies
+      - javascript
+      - no-closing-keyword
     schedule:
       interval: weekly
     cooldown:
@@ -29,6 +38,10 @@ updates:
 
   - package-ecosystem: docker
     directory: /
+    labels:
+      - dependencies
+      - docker
+      - no-closing-keyword
     schedule:
       interval: weekly
     cooldown:
@@ -40,6 +53,10 @@ updates:
 
   - package-ecosystem: docker-compose
     directory: /
+    labels:
+      - dependencies
+      - docker_compose
+      - no-closing-keyword
     schedule:
       interval: weekly
     cooldown:
@@ -51,6 +68,10 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    labels:
+      - dependencies
+      - github_actions
+      - no-closing-keyword
     schedule:
       interval: weekly
     cooldown:
