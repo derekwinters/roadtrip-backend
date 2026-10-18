@@ -677,6 +677,7 @@ components:
         min_stop_duration_min: { type: number }
         arrival_radius_m: { type: number }
         city_radius_km: { type: number }
+        operational_log_max_rows: { type: integer }
         open_profile_creation: { type: boolean }
     ConfigPatch:
       type: object
@@ -687,6 +688,7 @@ components:
         min_stop_duration_min: { type: number, minimum: 1, maximum: 240 }
         arrival_radius_m: { type: number, minimum: 100, maximum: 5000 }
         city_radius_km: { type: number, minimum: 1, maximum: 50 }
+        operational_log_max_rows: { type: integer, minimum: 1, maximum: 100000 }
         open_profile_creation: { type: boolean }
     Destination:
       type: object

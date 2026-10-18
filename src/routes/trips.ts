@@ -25,7 +25,7 @@ const patchSchema = z
   })
   .strict()
   .refine((v) => v.name !== undefined || v.planned_start_at !== undefined, { message: 'Nothing to update' })
-const idSchema = z.object({ id: z.string().uuid() })
+const idSchema = z.object({ id: z.guid() })
 
 const iso = (v: Date | string | null): string | null =>
   v === null ? null : v instanceof Date ? v.toISOString() : v

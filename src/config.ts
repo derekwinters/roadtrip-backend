@@ -8,6 +8,7 @@ export interface AppConfig {
   min_stop_duration_min: number
   arrival_radius_m: number
   city_radius_km: number
+  operational_log_max_rows: number
   open_profile_creation: boolean
 }
 
@@ -20,6 +21,7 @@ export const CONFIG_DEFAULTS: AppConfig = {
   min_stop_duration_min: 10,
   arrival_radius_m: 800,
   city_radius_km: 10,
+  operational_log_max_rows: 1000,
   open_profile_creation: true,
 }
 
@@ -29,9 +31,13 @@ export const CONFIG_BOUNDS: Record<NumericConfigKey, [number, number]> = {
   min_stop_duration_min: [1, 240],
   arrival_radius_m: [100, 5000],
   city_radius_km: [1, 50],
+  operational_log_max_rows: [1, 100000],
 }
 
 const BOOLEAN_KEYS = new Set<keyof AppConfig>(['open_profile_creation'])
+
+/** Numeric keys that must be whole numbers (CFG-007). */
+const INTEGER_KEYS = new Set<keyof AppConfig>(['operational_log_max_rows'])
 
 /** Seeds any missing keys with defaults; self-heals on boot (CFG-005). */
 export async function seedConfigDefaults(db: Db): Promise<void> {
@@ -76,6 +82,9 @@ export function validateConfigPatch(patch: Record<string, unknown>): Partial<App
     const value = typeof raw === 'number' ? raw : NaN
     if (!Number.isFinite(value) || value < bounds[0] || value > bounds[1]) {
       throw validation(`${key} must be a number in [${bounds[0]}, ${bounds[1]}]`)
+    }
+    if (INTEGER_KEYS.has(key as keyof AppConfig) && !Number.isInteger(value)) {
+      throw validation(`${key} must be an integer`)
     }
     out[key] = value
   }

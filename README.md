@@ -57,7 +57,9 @@ read models over them:
   downloads are cursor-paged with long-polling.
 - **Address search** — parent-only `GET /api/geocode` proxies Nominatim for destination
   planning, with a persistent cache and 1 req/s throttling. It is the single best-effort
-  online endpoint; the trip runtime itself never needs internet.
+  online endpoint; the trip runtime itself never needs internet. Failed lookups are also
+  recorded in the database's `operational_log` table (`SELECT * FROM operational_log ORDER BY
+  id DESC`), so the reason survives a container restart.
 
 The full specification lives in [docs/spec/](docs/spec/00-overview.md) — start with the
 overview. Every behavior carries a requirement ID; CI fails if a testable requirement loses

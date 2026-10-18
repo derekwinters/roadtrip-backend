@@ -4,7 +4,7 @@ import { PLATE_STATE_CODES } from '../bingo/states.js'
 /** Event payload schemas — the normative catalog is docs/spec/02-event-model.md (EVT-003). */
 
 const ts = z.string().datetime({ offset: true })
-const uuid = z.string().uuid()
+const uuid = z.guid()
 
 // BNG-001: a 2-letter uppercase code from the bundled states + DC; anything else rejects.
 const platePayload = z
@@ -77,7 +77,7 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
       game_type: z.enum(['chess', 'checkers', 'tictactoe', 'ultimate', 'hangman']),
       mode: z.enum(['open', 'challenge']),
       invited_profile_id: uuid.optional(),
-      options: z.record(z.unknown()).default({}),
+      options: z.record(z.string(), z.unknown()).default({}),
     })
     .strict(),
   'game.joined': z.object({ game_id: uuid, profile_id: uuid }).strict(),
@@ -108,7 +108,7 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
     })
     .strict(),
   'destination.removed': z.object({ destination_id: uuid }).strict(),
-  'config.updated': z.object({ changes: z.record(z.number()) }).strict(),
+  'config.updated': z.object({ changes: z.record(z.string(), z.number()) }).strict(),
   'profile.created': z
     .object({ profile_id: uuid, name: z.string(), avatar: z.string(), role: z.enum(['parent', 'kid']) })
     .strict(),

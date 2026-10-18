@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireProfile } from '../auth.js'
 import { resolveTripScope } from '../trips/scope.js'
 
-const querySchema = z.object({ trip: z.string().uuid().optional() })
+const querySchema = z.object({ trip: z.guid().optional() })
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : v)
 

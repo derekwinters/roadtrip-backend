@@ -64,6 +64,12 @@ A cache miss whose upstream call does not yield results fails with `503`, but th
 In both cases the failure is logged with the underlying error so an operator can tell
 egress-blocked from upstream-blocked, and the cache is never polluted with a failure.
 
+Each such failure is **also recorded in the operational log** (`15-operational-log.md`) — source
+`geocode`, the `error.code` as the code, and a detail of the normalized query plus the upstream
+HTTP status when there is one — so the reason survives a process restart, when the process log
+does not. Recording is best-effort (OPLOG-005): if the write fails, the response is still the
+same 503 with the same `error.code`. Successes and cache hits record nothing.
+
 ## Requirements
 
 | ID | Requirement | Verify |
@@ -74,3 +80,4 @@ egress-blocked from upstream-blocked, and the cache is never polluted with a fai
 | GSR-004 | A cache miss where the upstream is *unreachable* (the fetch throws — network error, DNS failure, connection refused, or timeout) returns 503 with `error.code = "geocode_unavailable"`; the underlying error is logged and the cache is not polluted. | auto |
 | GSR-005 | Upstream calls are throttled to ≥ 1 s start-to-start spacing (Nominatim policy); concurrent requests queue for the single upstream slot rather than calling upstream in parallel. | auto |
 | GSR-006 | A cache miss where the upstream is *reached but returns an error* (a non-2xx HTTP status, or an unusable body) returns 503 with `error.code = "geocode_upstream_error"`, carrying and logging the upstream HTTP status; the cache is not polluted. This is distinct from `geocode_unavailable` so callers can tell upstream-blocked from egress-blocked. | auto |
+| GSR-007 | Each cache miss that fails with `geocode_unavailable` (GSR-004) or `geocode_upstream_error` (GSR-006) records exactly one operational-log entry (source `geocode`, code = the `error.code`, detail = the normalized `query`, plus `upstream_status` for `geocode_upstream_error`); successful lookups and cache hits record nothing. A failure to record leaves the 503 response and its `error.code` unchanged. | auto |

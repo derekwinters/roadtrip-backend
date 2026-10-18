@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { ThrottleQueue, nominatimFetcher, UpstreamGeocodeError } from '../../src/geocode/search.js'
+import { ThrottleQueue, nominatimFetcher, UpstreamGeocodeError, GeocodeSearch } from '../../src/geocode/search.js'
+import type { Db } from '../../src/db.js'
 
 /** Deterministic virtual clock: sleep() advances time instantly. */
 function fakeClock() {
@@ -139,5 +140,49 @@ describe('default Nominatim fetcher', () => {
     const err = await fetcher('anywhere').catch((e) => e)
     expect(err).not.toBeInstanceOf(UpstreamGeocodeError)
     expect(String(err)).toMatch(/fetch failed/)
+  })
+})
+
+describe('geocode search dedupe', () => {
+  it('a concurrent identical query whose cache read is slow still shares the one upstream call [GSR-003] [GSR-005]', async () => {
+    // In-memory geocode_cache. The SECOND cache read is held until the first search has
+    // finished entirely (upstream call + cache insert), so it returns its pre-insert snapshot:
+    // the window a slow database opens in CI.
+    const cache = new Map<string, unknown>()
+    let reads = 0
+    let releaseSecondRead: () => void = () => undefined
+    const secondReadHeld = new Promise<void>((r) => (releaseSecondRead = r))
+    const db = {
+      query: async (sql: string, params: unknown[]) => {
+        if (sql.startsWith('SELECT results FROM geocode_cache')) {
+          reads += 1
+          const snapshot = cache.get(params[0] as string)
+          if (reads === 2) await secondReadHeld
+          return { rows: snapshot ? [{ results: snapshot }] : [] }
+        }
+        if (sql.includes('INSERT INTO geocode_cache')) {
+          cache.set(params[0] as string, JSON.parse(params[1] as string))
+          return { rows: [] }
+        }
+        return { rows: [] }
+      },
+    } as unknown as Db
+    let upstreamCalls = 0
+    const search = new GeocodeSearch(db, {
+      minSpacingMs: 1,
+      logger: { warn: () => undefined },
+      fetcher: async () => {
+        upstreamCalls += 1
+        return [{ display_name: 'Duluth, Minnesota', lat: 46.79, lon: -92.1 }]
+      },
+    })
+
+    const first = search.search('Duluth')
+    const second = search.search('duluth')
+    await first
+    releaseSecondRead()
+    const [a, b] = await Promise.all([first, second])
+    expect(a).toEqual(b)
+    expect(upstreamCalls).toBe(1)
   })
 })

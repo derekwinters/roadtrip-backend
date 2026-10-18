@@ -8,7 +8,7 @@ import { resolveTripScope } from '../trips/scope.js'
 const querySchema = z.object({
   before: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(200).default(50),
-  trip: z.string().uuid().optional(),
+  trip: z.guid().optional(),
 })
 
 const postSchema = z.object({ text: z.string().trim().min(1).max(2000) }).strict()

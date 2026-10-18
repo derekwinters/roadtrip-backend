@@ -6,7 +6,7 @@ import { resolveTripScope } from '../trips/scope.js'
 
 const querySchema = z.object({
   max_points: z.coerce.number().int().min(2).max(10_000).default(500),
-  trip: z.string().uuid().optional(),
+  trip: z.guid().optional(),
 })
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : v)
