@@ -232,6 +232,28 @@ async function checkArrival(
   await commitArrival(db, state, dest, stop.started_at, emit, { linkStopId: stop.id, advance: true, manual: false })
 }
 
+/**
+ * The single write path for visited cities (GEO-004/GEO-008): inserts into cities_visited
+ * under the per-trip uniqueness (TRIP-006) and emits `location.crossing.city` only when the
+ * row is new, so a city reached by both a pass-through and a stop is recorded once.
+ */
+async function recordCityVisited(
+  db: Db,
+  state: EngineState,
+  city: { city: string; state_code: string },
+  firstAtIso: string,
+  emit: Emit,
+): Promise<void> {
+  const inserted = await db.query(
+    `INSERT INTO cities_visited (city, state_code, first_at, trip_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT ((COALESCE(trip_id, '00000000-0000-0000-0000-000000000000'::uuid)), city, state_code) DO NOTHING`,
+    [city.city, city.state_code, firstAtIso, state.trip_id ?? null],
+  )
+  if ((inserted.rowCount ?? 0) > 0) {
+    await emit('location.crossing.city', { city: city.city, state_code: city.state_code }, firstAtIso)
+  }
+}
+
 async function processPing(
   db: Db,
   cfg: AppConfig,
@@ -287,18 +309,11 @@ async function processPing(
     if (!state.leg_states.includes(hit.code)) state.leg_states.push(hit.code)
   }
 
-  // GEO-004: mark the nearest city within city_radius_km visited, once per trip
-  // (dedupe is per trip epoch, TRIP-006).
-  const city = nearestCityWithin(ping.lat, ping.lon, cfg.city_radius_km)
-  if (city) {
-    const inserted = await db.query(
-      `INSERT INTO cities_visited (city, state_code, first_at, trip_id) VALUES ($1, $2, $3, $4)
-       ON CONFLICT ((COALESCE(trip_id, '00000000-0000-0000-0000-000000000000'::uuid)), city, state_code) DO NOTHING`,
-      [city.city, city.state_code, ping.tsIso, state.trip_id ?? null],
-    )
-    if ((inserted.rowCount ?? 0) > 0) {
-      await emit('location.crossing.city', { city: city.city, state_code: city.state_code }, ping.tsIso)
-    }
+  // GEO-004/GEO-007/GEO-009: while track_cities_through is on, mark the nearest qualifying
+  // city within city_radius_km visited, once per trip (dedupe is per trip epoch, TRIP-006).
+  if (cfg.track_cities_through) {
+    const city = nearestCityWithin(ping.lat, ping.lon, cfg.city_radius_km, cfg.city_min_population)
+    if (city) await recordCityVisited(db, state, city, ping.tsIso, emit)
   }
 
   // LOC-007: breadcrumb mileage accumulators (per leg and whole trip).
@@ -346,10 +361,15 @@ async function processPing(
       const open = state.open_stop!
       const endedAtIso = ping.tsIso
       const journalWorthy = isJournalWorthy(effect.durationMin, cfg.min_stop_duration_min)
-      // GEO-006: journal-worthy stops get the nearest city as their place.
-      const place = journalWorthy
-        ? (nearestCityWithin(effect.anchorLat, effect.anchorLon, cfg.city_radius_km)?.city ?? null)
+      // GEO-006: journal-worthy stops get the nearest qualifying city as their place.
+      const placeCity = journalWorthy
+        ? nearestCityWithin(effect.anchorLat, effect.anchorLon, cfg.city_radius_km, cfg.city_min_population)
         : null
+      const place = placeCity?.city ?? null
+      // GEO-008: the stop's city also counts as visited, stamped with the stop start.
+      if (placeCity && cfg.track_cities_stopped) {
+        await recordCityVisited(db, state, placeCity, open.started_at, emit)
+      }
       await db.query(
         `UPDATE stops SET ended_at = $2, duration_min = $3, journal_worthy = $4, place = $5 WHERE id = $1`,
         [open.id, endedAtIso, effect.durationMin, journalWorthy, place],

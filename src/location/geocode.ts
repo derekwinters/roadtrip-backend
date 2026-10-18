@@ -3,7 +3,8 @@
  *
  * Datasets are bundled in the repo/image — no runtime internet (SYS-007):
  * - data/us-states.geojson: simplified state polygons ([lon, lat] coordinates).
- * - data/us-cities.json: city centroids with state and population.
+ * - data/us-cities.json: every US place centroid with state and population (no cutoff;
+ *   the runtime `city_min_population` threshold decides what counts, GEO-009).
  *
  * Both datasets are parsed once and cached in module state.
  */
@@ -116,12 +117,21 @@ export function stateForPoint(lat: number, lon: number): StateHit | null {
   return null
 }
 
-/** Nearest city centroid within `radiusKm`, or null (GEO-004/GEO-006). */
-export function nearestCityWithin(lat: number, lon: number, radiusKm: number): CityHit | null {
+/**
+ * Nearest city centroid within `radiusKm` among places with population ≥ `minPopulation`,
+ * or null (GEO-004/GEO-006/GEO-008). Smaller places are skipped even when nearer (GEO-009).
+ */
+export function nearestCityWithin(
+  lat: number,
+  lon: number,
+  radiusKm: number,
+  minPopulation: number,
+): CityHit | null {
   const maxLatDelta = radiusKm / 111.19493 // quick reject band
   let best: CityHit | null = null
   for (const city of loadCities()) {
     if (Math.abs(city.lat - lat) > maxLatDelta) continue
+    if (city.population < minPopulation) continue
     const distanceKm = haversineMeters({ lat, lon }, city) / 1000
     if (distanceKm <= radiusKm && (best === null || distanceKm < best.distanceKm)) {
       best = { city: city.city, state_code: city.state_code, lat: city.lat, lon: city.lon, distanceKm }

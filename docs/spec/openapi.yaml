@@ -685,6 +685,9 @@ components:
         min_stop_duration_min: { type: number }
         arrival_radius_m: { type: number }
         city_radius_km: { type: number }
+        city_min_population: { type: integer }
+        track_cities_through: { type: boolean }
+        track_cities_stopped: { type: boolean }
         operational_log_max_rows: { type: integer }
         stop_label_max_chars: { type: integer }
         open_profile_creation: { type: boolean }
@@ -697,6 +700,9 @@ components:
         min_stop_duration_min: { type: number, minimum: 1, maximum: 240 }
         arrival_radius_m: { type: number, minimum: 100, maximum: 5000 }
         city_radius_km: { type: number, minimum: 1, maximum: 50 }
+        city_min_population: { type: integer, minimum: 0, maximum: 10000000 }
+        track_cities_through: { type: boolean }
+        track_cities_stopped: { type: boolean }
         operational_log_max_rows: { type: integer, minimum: 1, maximum: 100000 }
         stop_label_max_chars: { type: integer, minimum: 1, maximum: 2000 }
         open_profile_creation: { type: boolean }

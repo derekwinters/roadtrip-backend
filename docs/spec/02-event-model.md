@@ -33,7 +33,7 @@ Server-derived (never accepted from clients):
 | `location.stop.started` | `{stop_id, lat, lon}` — `client_ts` backdated to first stationary ping |
 | `location.stop.ended` | `{stop_id, lat, lon, started_at, ended_at, duration_min, place?}` |
 | `location.crossing.state` | `{state, state_code, prev_state_code?}` |
-| `location.crossing.city` | `{city, state_code}` |
+| `location.crossing.city` | `{city, state_code}` — once per city per trip, from a pass-through ping (GEO-004, `client_ts` = that ping) or a journal-worthy stop (GEO-008, `client_ts` = the stop's start); same payload either way |
 | `trip.leg.arrived` | `{destination_id, destination_name, summary: LegSummary}` |
 | `trip.started` | `{trip_id, name}` — `client_ts` = the trip's `started_at` |
 | `trip.ended` | `{trip_id, name, miles, states_count}` — `client_ts` = the trip's `ended_at`; totals frozen for the journal (TRIP-009) |

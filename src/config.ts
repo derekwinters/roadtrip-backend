@@ -8,20 +8,29 @@ export interface AppConfig {
   min_stop_duration_min: number
   arrival_radius_m: number
   city_radius_km: number
+  city_min_population: number
+  track_cities_through: boolean
+  track_cities_stopped: boolean
   operational_log_max_rows: number
   stop_label_max_chars: number
   open_profile_creation: boolean
 }
 
-/** Numeric tunables, bounded below; boolean flags are typed by BOOLEAN_KEYS (CFG-006). */
-type NumericConfigKey = Exclude<keyof AppConfig, 'open_profile_creation'>
+/** Boolean behavior flags (CFG-006, CFG-009). */
+type BooleanConfigKey = 'open_profile_creation' | 'track_cities_through' | 'track_cities_stopped'
+
+/** Numeric tunables, bounded below; boolean flags are typed by BOOLEAN_KEYS. */
+type NumericConfigKey = Exclude<keyof AppConfig, BooleanConfigKey>
 
 export const CONFIG_DEFAULTS: AppConfig = {
   ping_interval_s: 300,
   stop_radius_m: 100,
   min_stop_duration_min: 10,
   arrival_radius_m: 800,
-  city_radius_km: 10,
+  city_radius_km: 15,
+  city_min_population: 5000,
+  track_cities_through: true,
+  track_cities_stopped: true,
   operational_log_max_rows: 1000,
   stop_label_max_chars: 80,
   open_profile_creation: true,
@@ -33,14 +42,15 @@ export const CONFIG_BOUNDS: Record<NumericConfigKey, [number, number]> = {
   min_stop_duration_min: [1, 240],
   arrival_radius_m: [100, 5000],
   city_radius_km: [1, 50],
+  city_min_population: [0, 10_000_000],
   operational_log_max_rows: [1, 100000],
   stop_label_max_chars: [1, 2000],
 }
 
-const BOOLEAN_KEYS = new Set<keyof AppConfig>(['open_profile_creation'])
+const BOOLEAN_KEYS = new Set<keyof AppConfig>(['open_profile_creation', 'track_cities_through', 'track_cities_stopped'])
 
-/** Numeric keys that must be whole numbers (CFG-007, CFG-008). */
-const INTEGER_KEYS = new Set<keyof AppConfig>(['operational_log_max_rows', 'stop_label_max_chars'])
+/** Numeric keys that must be whole numbers (CFG-007, CFG-008, CFG-009). */
+const INTEGER_KEYS = new Set<keyof AppConfig>(['operational_log_max_rows', 'stop_label_max_chars', 'city_min_population'])
 
 /** Seeds any missing keys with defaults; self-heals on boot (CFG-005). */
 export async function seedConfigDefaults(db: Db): Promise<void> {

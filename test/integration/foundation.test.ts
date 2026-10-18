@@ -349,9 +349,54 @@ describe('config', () => {
       stop_radius_m: 100,
       min_stop_duration_min: 10,
       arrival_radius_m: 800,
-      city_radius_km: 10,
+      city_radius_km: 15, // covers: CFG-009
+      city_min_population: 5000, // covers: CFG-009
+      track_cities_through: true, // covers: CFG-009
+      track_cities_stopped: true, // covers: CFG-009
       open_profile_creation: true, // covers: CFG-006
     })
+  })
+
+  it('city tracking keys are typed, bounded, and parent-only [CFG-009] [CFG-002]', async () => {
+    for (const payload of [
+      { city_min_population: 2.5 },
+      { city_min_population: -1 },
+      { city_min_population: 10_000_001 },
+      { city_min_population: '5000' },
+      { track_cities_through: 'yes' },
+      { track_cities_stopped: 1 },
+      { track_cities_stopped: false, city_min_population: -5 }, // all-or-nothing
+    ]) {
+      const bad = await t.app.inject({ method: 'PUT', url: '/api/config', headers: asProfile(parent.id), payload })
+      expect(bad.statusCode).toBe(400)
+      expect(bad.json().error.code).toBe('validation')
+    }
+    const kidPut = await t.app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: asProfile(kid.id),
+      payload: { track_cities_through: false },
+    })
+    expect(kidPut.statusCode).toBe(403)
+    const unchanged = await t.app.inject({ method: 'GET', url: '/api/config', headers: asProfile(kid.id) })
+    expect(unchanged.json()).toMatchObject({ city_min_population: 5000, track_cities_through: true, track_cities_stopped: true })
+
+    const ok = await t.app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: asProfile(parent.id),
+      payload: { city_min_population: 0, track_cities_through: false, track_cities_stopped: false },
+    })
+    expect(ok.statusCode).toBe(200)
+    expect(ok.json()).toMatchObject({ city_min_population: 0, track_cities_through: false, track_cities_stopped: false })
+    // Restore defaults for the rest of the suite.
+    const back = await t.app.inject({
+      method: 'PUT',
+      url: '/api/config',
+      headers: asProfile(parent.id),
+      payload: { city_min_population: 5000, track_cities_through: true, track_cities_stopped: true },
+    })
+    expect(back.statusCode).toBe(200)
   })
 
   it('open_profile_creation is boolean-validated and parent-togglable [CFG-006] [CFG-002]', async () => {
