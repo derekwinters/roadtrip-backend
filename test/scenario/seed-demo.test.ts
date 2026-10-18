@@ -58,5 +58,7 @@ describe('demo trip seed', () => {
     expect(bingo.cells.length).toBeGreaterThanOrEqual(3)
     expect(bingo.log.filter((l: any) => l.action === 'unspotted')).toHaveLength(1)
     expect(Object.keys(bingo.counts).length).toBeGreaterThanOrEqual(2)
+    // The card mixes US and Canadian plates (covers: BNG-001, BNG-006).
+    expect(bingo.cells.map((c: any) => c.state_code)).toContain('BC')
   })
 })

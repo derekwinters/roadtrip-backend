@@ -22,8 +22,8 @@ Client-originated (accepted via sync batch or dedicated endpoints):
 |------|---------|-------------|
 | `location.ping` | `{lat, lon, accuracy_m?, speed_mps?}` | parent phone only |
 | `journal.post` | `{text}` (1–2000 chars) | any profile |
-| `plate.spotted` | `{state_code}` (bundled states + DC) | any profile (license plate bingo, see 14-bingo.md) |
-| `plate.unspotted` | `{state_code}` (bundled states + DC) | any profile (license plate bingo, see 14-bingo.md) |
+| `plate.spotted` | `{state_code}` (bundled US states + DC + Canadian provinces/territories) | any profile (license plate bingo, see 14-bingo.md) |
+| `plate.unspotted` | `{state_code}` (bundled US states + DC + Canadian provinces/territories) | any profile (license plate bingo, see 14-bingo.md) |
 
 Server-derived (never accepted from clients):
 

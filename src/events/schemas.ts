@@ -6,7 +6,7 @@ import { PLATE_STATE_CODES } from '../bingo/states.js'
 const ts = z.string().datetime({ offset: true })
 const uuid = z.guid()
 
-// BNG-001: a 2-letter uppercase code from the bundled states + DC; anything else rejects.
+// BNG-001: a 2-letter uppercase code from the bundled US states + DC + Canadian provinces; anything else rejects.
 const platePayload = z
   .object({
     state_code: z
