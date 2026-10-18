@@ -105,4 +105,17 @@ describe('bingo card fold', () => {
     const bareIgnored = foldBingoCard([ev('plate.spotted', SAM, 'CO', T(1)), ev('plate.unspotted', DAD, 'CO', T(2))])
     expect(bareIgnored.cells).toHaveLength(1)
   })
+
+  it('folds a mixed US + Canada card like any other [BNG-001]', () => {
+    const card = foldBingoCard(
+      [ev('plate.spotted', SAM, 'ON', T(1)), ev('plate.spotted', ALEX, 'CO', T(2)), ev('plate.spotted', DAD, 'BC', T(3))],
+      profiles,
+    )
+    expect(card.cells.map((c) => [c.state_code, c.spotted_by])).toEqual([
+      ['BC', DAD],
+      ['CO', ALEX],
+      ['ON', SAM],
+    ])
+    expect(card.counts).toEqual({ [SAM]: 1, [ALEX]: 1, [DAD]: 1 })
+  })
 })

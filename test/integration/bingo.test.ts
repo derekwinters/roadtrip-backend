@@ -193,4 +193,22 @@ describe('license plate bingo', () => {
     const dadItems = (await getJson(dad.id, '/api/notifications')).items
     expect(dadItems).toEqual([]) // dad started the trip; plates never notify anyone
   })
+
+  it('accepts Canadian plates end to end and folds them into a mixed US + Canada card [BNG-001]', async () => {
+    // Runs last: earlier cases assert the exact card, and this one only adds to it.
+    expect((await syncPlate(sam.id, 'plate.spotted', 'ON', ts(130))).result.status).toBe('accepted')
+    expect((await syncPlate(alex.id, 'plate.spotted', 'YT', ts(140))).result.status).toBe('accepted')
+    expect((await syncPlate(alex.id, 'plate.spotted', 'ZZ', ts(150))).result.status).toBe('rejected')
+
+    const card = await getJson(sam.id, '/api/bingo')
+    expect(card.cells.map((c: any) => [c.state_code, c.spotted_by])).toEqual([
+      ['DC', alex.id],
+      ['ON', sam.id],
+      ['TX', dad.id],
+      ['WY', sam.id],
+      ['YT', alex.id],
+    ])
+    expect(card.counts).toEqual({ [sam.id]: 2, [alex.id]: 2, [dad.id]: 1 })
+  })
 })
+

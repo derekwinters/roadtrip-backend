@@ -194,12 +194,14 @@ export async function seedDemo(app: FastifyInstance): Promise<void> {
     )
   }
 
-  // ---- license plate bingo (BNG-006): partially filled card with one removal ---
+  // ---- license plate bingo (BNG-006): partially filled US + Canada card, one removal
   const plates: Array<[string, 'plate.spotted' | 'plate.unspotted', string, number]> = [
     [sam, 'plate.spotted', 'CO', 20],
     [alex, 'plate.spotted', 'TX', 95],
     [sam, 'plate.spotted', 'NE', 170],
     [alex, 'plate.spotted', 'WY', 345],
+    // A Canadian plate on the same card (BNG-001).
+    [alex, 'plate.spotted', 'BC', 360],
     // Sam withdraws his own doubtful Nebraska sighting (honored: original spotter).
     [sam, 'plate.unspotted', 'NE', 380],
   ]

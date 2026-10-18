@@ -809,7 +809,7 @@ components:
       type: object
       required: [state_code, spotted_at]
       properties:
-        state_code: { type: string, description: 2-letter code (bundled states + DC) }
+        state_code: { type: string, description: 2-letter code (bundled US states + DC + Canadian provinces/territories) }
         spotted_by: { type: string, format: uuid, nullable: true, description: standing credit holder (BNG-002) }
         spotted_by_name: { type: string }
         spotted_at: { type: string, format: date-time }
