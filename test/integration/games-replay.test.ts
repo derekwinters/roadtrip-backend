@@ -120,6 +120,20 @@ describe('replay determinism (pure fold) per game type', () => {
     await assertReplayMatches(id)
   })
 
+  it("Four in a Row: replaying a finished game's events reproduces the cached state [GAME-006] [GAME-020]", async () => {
+    // The recorded game.move carries an advisory landing row; the fold must ignore it.
+    const id = await playGame('fourinarow', undefined, [
+      [creator.id, { column: 3 }],
+      [joiner.id, { column: 3 }],
+      [creator.id, { column: 4 }],
+      [joiner.id, { column: 4 }],
+      [creator.id, { column: 5 }],
+      [joiner.id, { column: 5 }],
+      [creator.id, { column: 6 }], // creator wins the bottom row 3..6
+    ])
+    await assertReplayMatches(id)
+  })
+
   it("ultimate: replaying a finished game's events reproduces the cached state [GAME-006]", async () => {
     const id = await playGame(
       'ultimate',
