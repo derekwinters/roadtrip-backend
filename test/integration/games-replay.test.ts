@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createTestApp, asProfile, type TestApp } from '../helpers/app.js'
 import { getEngine } from '../../src/games/registry.js'
 import type { GameEngine } from '../../src/games/types.js'
+import { creatorWinsGame } from '../helpers/dotsandboxes.js'
 
 /**
  * GAME-006 — replay determinism: for every game type, fold the finished game's event
@@ -131,6 +132,18 @@ describe('replay determinism (pure fold) per game type', () => {
       [joiner.id, { column: 5 }],
       [creator.id, { column: 6 }], // creator wins the bottom row 3..6
     ])
+    await assertReplayMatches(id)
+  })
+
+  it("Dots and Boxes: replaying a finished game with a multi-turn chain reproduces the cached state [GAME-006] [GAME-023]", async () => {
+    // 97 edges; the creator makes 36 consecutive moves (35 claims, then a pass), so the
+    // fold cannot assume alternation, and box owners must be re-derived from the edges.
+    const players = [creator.id, joiner.id]
+    const id = await playGame(
+      'dotsandboxes',
+      undefined,
+      creatorWinsGame().map(([by, edge]) => [players[by]!, edge]),
+    )
     await assertReplayMatches(id)
   })
 

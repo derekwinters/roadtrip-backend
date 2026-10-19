@@ -80,7 +80,7 @@ Android areas are specified in `roadtrip-android/docs/spec/` and prefixed `AND*`
 | `05-config.md` | Tunable parameters and parent-only administration |
 | `06-location.md` | Pings, stop/arrival detection, geocoding, mileage, legs |
 | `07-journal.md` | Journal feed, checklist, leg/trip summaries, deep links |
-| `08-games.md` | Game framework, six games, lobby/challenge/spectate/replay |
+| `08-games.md` | Game framework, seven games, lobby/challenge/spectate/replay |
 | `09-sync-notifications.md` | Offline sync contract, update feeds, notification events |
 | `10-testing.md` | Test strategy, GPS trip simulator, seed data, validation tooling |
 | `11-release-engineering.md` | Versioning (release-please), CI artifacts, RC + final releases |

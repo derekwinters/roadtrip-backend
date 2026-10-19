@@ -1,7 +1,8 @@
 # 08 — Games (GAME)
 
-Turn-based only (product decision). Six games: **chess, checkers, tic-tac-toe, ultimate
-tic-tac-toe, hangman, Four in a Row** (wire value `fourinarow`). All games are **event-sourced**: every move is a `game.move` event, and
+Turn-based only (product decision). Seven games: **chess, checkers, tic-tac-toe, ultimate
+tic-tac-toe, hangman, Four in a Row** (wire value `fourinarow`), **Dots and Boxes** (wire value
+`dotsandboxes`). All games are **event-sourced**: every move is a `game.move` event, and
 the server-side engine state is a pure fold over the game's event stream. That one design gives
 lobby, challenge, spectate, and replay for free.
 
@@ -39,13 +40,14 @@ interface GameEngine<S, M> {
 
 ### Move coordinate representation (grid games)
 
-The grid games use **three deliberately distinct move shapes**, one per kind of move:
+The grid games use **four deliberately distinct move shapes**, one per kind of move:
 
 | Game(s) | Move shape | Why |
 |---------|-----------|-----|
 | chess, checkers | `{ from, to }` (algebraic squares, below) | a piece travels from an origin square to a destination |
 | tic-tac-toe | `{ cell: 0..8 }` (ultimate adds `board: 0..8`) | a mark is placed on any empty cell; there is no origin |
 | Four in a Row | `{ column: 0..6 }` | a disc is dropped into a column; the landing row is **derived by gravity**, so the column alone is the whole move |
+| Dots and Boxes | `{ row, col, orientation: 'h' \| 'v' }` | a line is drawn between two adjacent dots; it is an **edge**, not a cell, so its orientation is part of its address (below) |
 
 The two piece-moving grid games — **chess and checkers** — use the **same algebraic square notation** so a
 single client move shape works for both (`{ from, to }`, each matching `^[a-h][1-8]$`). Files
@@ -71,6 +73,16 @@ the fold stays deterministic (GAME-006).
   42 cells filled with no line is a draw. A full column, a column outside `0..6`, a malformed
   payload, a move out of turn, or any move once the game is over is rejected. Nothing is
   hidden, so the view is viewerless. Resigning follows the symmetric rule (GAME-015).
+- Dots and Boxes (`dotsandboxes`): a fixed grid of 7 columns × 6 rows of **boxes** (an 8 × 7
+  dot lattice; there is no size option at creation), 97 edges and 42 boxes. The creator
+  (`players[0]`) moves first. A move draws one undrawn edge `{ row, col, orientation }`.
+  Drawing the fourth side of a box **claims** it for the mover; an edge that completes two
+  boxes at once claims both. A move that claims at least one box **keeps the turn** (the mover
+  moves again); a move that claims none passes it, so turns do not strictly alternate. When
+  all 97 edges are drawn the game is over: the player with more boxes wins, equal boxes (21–21)
+  is a draw. An already-drawn edge, an edge outside the lattice, a malformed payload, a move out
+  of turn, or any move once the game is over is rejected. Nothing is hidden, so the view is
+  viewerless. Resigning follows the symmetric rule (GAME-015).
 - Ultimate tic-tac-toe: 9 sub-boards; a move dictates the opponent's next sub-board; won
   sub-boards form the macro board; a full sub-board without a winner counts for neither side;
   if the dictated sub-board is decided/full, the player may choose any open sub-board.
@@ -144,6 +156,45 @@ stays deterministic (GAME-006).
 - **Invariant:** the landing row is always derived from the column's current fill, never taken
   from the client's payload — a submitted or recorded `row` cannot place a disc.
 
+### Dots and Boxes edges, boxes and view (GAME-023)
+
+Dots are addressed `(dotRow, dotCol)` with `dotRow` `0..6` from the **top** and `dotCol` `0..7`
+from the left (the same reading order as tic-tac-toe's cells). An edge is named by the dot it
+starts from and its direction:
+
+| `orientation` | Joins | `row` | `col` | Count |
+|---------------|-------|-------|-------|-------|
+| `'h'` (horizontal) | dot `(row, col)` → dot `(row, col + 1)` | `0..6` | `0..6` | 7 × 7 = 49 |
+| `'v'` (vertical) | dot `(row, col)` → dot `(row + 1, col)` | `0..5` | `0..7` | 6 × 8 = 48 |
+
+Box `(row, col)` (`row` `0..5`, `col` `0..6`) is bounded by `h(row, col)` (top),
+`h(row + 1, col)` (bottom), `v(row, col)` (left) and `v(row, col + 1)` (right). An `h` edge
+borders the boxes above and below it, a `v` edge the boxes to its left and right, so one edge
+can complete at most two boxes.
+
+The engine `view` (same for every viewer) is:
+
+```jsonc
+{
+  "h": [[0, null, …], …],      // 7 rows × 7 cols: who drew each horizontal edge (null = undrawn)
+  "v": [[null, 1, …], …],      // 6 rows × 8 cols: who drew each vertical edge
+  "boxes": [[0, null, …], …],  // 6 rows × 7 cols: who claimed each box (null = unclaimed)
+  "scores": [3, 1],            // boxes claimed by players[0], players[1]
+  "owners": ["<players[0] profile id>", "<players[1] profile id>"],  // value 0/1 → profile
+  "turn": "<profile id of the player to move>",
+  "players": ["<creator id>", "<joiner id>"]
+}
+```
+
+The recorded `game.move` payload is the submitted `{ row, col, orientation }` unchanged (no
+`record` normalization): claimed boxes and the next turn are re-derived when it is re-applied.
+
+- **Invariant:** box ownership is re-derived from the ordered set of drawn edges on every fold
+  — a box belongs to whoever drew the edge that completed it — and is never stored as separate
+  mutable state.
+- **Invariant:** the engine alone decides the next `turn` (keep it on a claim, pass it
+  otherwise); the game service has no Dots-and-Boxes-specific branch.
+
 ## Requirements
 
 | ID | Requirement | Verify |
@@ -170,3 +221,4 @@ stays deterministic (GAME-006).
 | GAME-020 | Four in a Row (`fourinarow`) plays on a 7×6 board: the creator moves first; a `{ column: 0..6 }` move drops a disc into the lowest empty row of that column; four in a line horizontally, vertically or on either diagonal wins for that player, and a full board with no line is a draw; a full column, an out-of-range column, a malformed payload, an out-of-turn move and a move after the game is over are rejected. The view is viewerless (`board` 6×7 with row 0 = bottom, `discs`, `turn`, `players`) and the recorded `game.move` is normalized to `{ column, row }` with an advisory landing `row`. | auto |
 | GAME-021 | `POST /api/games` for a game type whose `game_<type>_enabled` key (CFG-010) is `false` is rejected **403** with error code `game_disabled` and persists no `game.created` event and no game row; creating a type whose key is `true` succeeds as usual (GAME-001), and a toggle takes effect on the next create without a restart. | auto |
 | GAME-022 | Disabling a game type does not affect games that already exist: an active game of a type disabled after it started still accepts moves (GAME-004/005) and resignation (GAME-015/018), and any game of a disabled type remains readable and replayable via `GET /api/games/{id}` and `GET /api/games/{id}/events` (GAME-008). | auto |
+| GAME-023 | Dots and Boxes (`dotsandboxes`) plays on a fixed 7×6 grid of boxes (8×7 dots, 97 edges, 42 boxes): the creator moves first; a `{ row, col, orientation: 'h' \| 'v' }` move draws one edge (`h`: row `0..6`, col `0..6`; `v`: row `0..5`, col `0..7`); an edge that completes a box claims it for the mover, an edge completing two boxes claims both, and a move that claims any box keeps the turn while one that claims none passes it; when all 97 edges are drawn the player with more boxes wins and equal boxes is a draw; an already-drawn edge, an out-of-range edge, a malformed payload, an out-of-turn move and a move after the game is over are rejected. Box ownership is re-derived from the drawn edges on every fold. The view is viewerless (`h` 7×7, `v` 6×8, `boxes` 6×7, `scores`, `owners`, `turn`, `players`). | auto |

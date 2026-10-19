@@ -5,9 +5,10 @@ import { tictactoe } from './engines/tictactoe.js'
 import { ultimate } from './engines/ultimate.js'
 import { hangman } from './engines/hangman.js'
 import { fourinarow } from './engines/fourinarow.js'
+import { dotsandboxes } from './engines/dotsandboxes.js'
 
-/** The six turn-based games of docs/spec/08-games.md. */
-export const GAME_TYPES = ['chess', 'checkers', 'tictactoe', 'ultimate', 'hangman', 'fourinarow'] as const
+/** The seven turn-based games of docs/spec/08-games.md. */
+export const GAME_TYPES = ['chess', 'checkers', 'tictactoe', 'ultimate', 'hangman', 'fourinarow', 'dotsandboxes'] as const
 export type GameType = (typeof GAME_TYPES)[number]
 
 /**
@@ -22,6 +23,7 @@ const engines: Record<GameType, GameEngine<any, any>> = {
   ultimate,
   hangman,
   fourinarow,
+  dotsandboxes,
 }
 
 export function getEngine(type: string): GameEngine<any, any> {

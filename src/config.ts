@@ -21,6 +21,7 @@ const GAME_ENABLED_DEFAULTS: Record<GameType, boolean> = {
   ultimate: true,
   hangman: true,
   fourinarow: true,
+  dotsandboxes: true,
 }
 
 const GAME_ENABLED_KEYS: GameEnabledKey[] = GAME_TYPES.map(gameEnabledKey)

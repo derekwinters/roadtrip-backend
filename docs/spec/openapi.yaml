@@ -457,7 +457,7 @@ paths:
               type: object
               required: [game_type, mode]
               properties:
-                game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman, fourinarow] }
+                game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman, fourinarow, dotsandboxes] }
                 mode: { enum: [open, challenge] }
                 invited_profile_id: { type: string, format: uuid }
                 options:
@@ -702,6 +702,7 @@ components:
         game_ultimate_enabled: { type: boolean, description: 'CFG-010 / GAME-021' }
         game_hangman_enabled: { type: boolean, description: 'CFG-010 / GAME-021' }
         game_fourinarow_enabled: { type: boolean, description: 'CFG-010 / GAME-021' }
+        game_dotsandboxes_enabled: { type: boolean, description: 'CFG-010 / GAME-021' }
     ConfigPatch:
       type: object
       additionalProperties: false
@@ -723,6 +724,7 @@ components:
         game_ultimate_enabled: { type: boolean, description: 'CFG-010 / GAME-021' }
         game_hangman_enabled: { type: boolean, description: 'CFG-010 / GAME-021' }
         game_fourinarow_enabled: { type: boolean, description: 'CFG-010 / GAME-021' }
+        game_dotsandboxes_enabled: { type: boolean, description: 'CFG-010 / GAME-021' }
     Destination:
       type: object
       required: [id, name, lat, lon, order_index, status]
@@ -889,7 +891,7 @@ components:
       required: [id, game_type, mode, status, created_by]
       properties:
         id: { type: string, format: uuid }
-        game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman, fourinarow] }
+        game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman, fourinarow, dotsandboxes] }
         mode: { enum: [open, challenge] }
         status: { enum: [open, active, finished, abandoned] }
         created_by: { type: string, format: uuid }
