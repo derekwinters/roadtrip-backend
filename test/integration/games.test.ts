@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import { createTestApp, asProfile, type TestApp } from '../helpers/app.js'
+import { creatorWinsGame, drawGame } from '../helpers/dotsandboxes.js'
 
 let t: TestApp
 let dad: { id: string }
@@ -300,6 +301,101 @@ describe('Four in a Row over the API', () => {
     expect(full.json().error.message).toMatch(/full/i)
     expect((await move(dad.id, id, { column: 7 })).statusCode).toBe(400)
     expect((await move(dad.id, id, { cell: 3 })).statusCode).toBe(400)
+
+    const after = (await gameEvents(id, alex.id)).events.filter((e) => e.type === 'game.move').length
+    expect(after).toBe(before)
+  })
+})
+
+describe('Dots and Boxes over the API', () => {
+  async function activeDotsAndBoxes(): Promise<string> {
+    const created = await createGame(dad.id, { game_type: 'dotsandboxes', mode: 'open' })
+    expect(created.statusCode, created.body).toBe(201)
+    expect(created.json()).toMatchObject({ game_type: 'dotsandboxes', status: 'open' })
+    const id = created.json().id
+    expect((await join(sam.id, id)).statusCode).toBe(200)
+    return id
+  }
+
+  it('plays create → join → moves → finished end to end, keeping the turn on a claim [GAME-023] [GAME-007]', async () => {
+    const id = await activeDotsAndBoxes()
+    const players = [dad.id, sam.id]
+    const script = creatorWinsGame()
+
+    const first = await move(dad.id, id, script[0]![1])
+    expect(first.statusCode).toBe(200)
+    expect(first.json().view).toMatchObject({ owners: [dad.id, sam.id], scores: [0, 0], turn: sam.id, players: [dad.id, sam.id] })
+    expect(first.json().view.h[0][0]).toBe(0)
+
+    let last: any
+    for (const [i, [by, edge]] of script.entries()) {
+      if (i === 0) continue
+      const res = await move(players[by]!, id, edge)
+      expect(res.statusCode, `move ${i + 1}: ${res.body}`).toBe(200)
+      last = res.json()
+      if (i === 54) {
+        // dad's first claim: box (0,0) is his and he moves again.
+        expect(last.view.boxes[0][0]).toBe(0)
+        expect(last.view.scores).toEqual([1, 0])
+        expect(last.turn).toBe(dad.id)
+      }
+    }
+    expect(last).toMatchObject({ status: 'finished', result: 'win', winner_id: dad.id, move_count: 97, turn: null })
+    expect(last.view.scores).toEqual([35, 7])
+
+    const { events } = await gameEvents(id, alex.id)
+    expect(events.find((e) => e.type === 'game.created').payload).toMatchObject({ game_type: 'dotsandboxes' })
+    expect(events.find((e) => e.type === 'game.finished').payload).toMatchObject({
+      game_type: 'dotsandboxes',
+      result: 'win',
+      winner_profile_id: dad.id,
+      loser_profile_id: sam.id,
+      move_count: 97,
+    })
+    // The recorded move is the submitted edge, unchanged.
+    const recorded = events.filter((e) => e.type === 'game.move').map((e) => e.payload.move)
+    expect(recorded).toEqual(script.map(([, edge]) => edge))
+
+    const { rows } = await t.db.pool.query('SELECT game_type, status FROM games WHERE id = $1', [id])
+    expect(rows[0]).toEqual({ game_type: 'dotsandboxes', status: 'finished' })
+  })
+
+  it('equal boxes when every edge is drawn finishes as a draw [GAME-023] [GAME-007]', async () => {
+    const id = await activeDotsAndBoxes()
+    const players = [dad.id, sam.id]
+    let last: any
+    for (const [by, edge] of drawGame()) {
+      const res = await move(players[by]!, id, edge)
+      expect(res.statusCode, res.body).toBe(200)
+      last = res.json()
+    }
+    expect(last).toMatchObject({ status: 'finished', result: 'draw', winner_id: null, move_count: 97 })
+    expect(last.view.scores).toEqual([21, 21])
+  })
+
+  it('rejects duplicate, out-of-range and malformed edges with 400 and no event [GAME-023] [GAME-004]', async () => {
+    const id = await activeDotsAndBoxes()
+    expect((await move(dad.id, id, { row: 0, col: 0, orientation: 'h' })).statusCode).toBe(200)
+    const before = (await gameEvents(id, alex.id)).events.filter((e) => e.type === 'game.move').length
+
+    const dup = await move(sam.id, id, { row: 0, col: 0, orientation: 'h' })
+    expect(dup.statusCode).toBe(400)
+    expect(dup.json().error.code).toBe('illegal_move')
+    expect(dup.json().error.message).toMatch(/already/i)
+    for (const bad of [
+      { row: 7, col: 0, orientation: 'h' },
+      { row: 0, col: 8, orientation: 'v' },
+      { row: 6, col: 0, orientation: 'v' },
+      { row: 0, col: 0 },
+      { row: 0, col: 0, orientation: 'x' },
+      { column: 3 },
+    ]) {
+      const res = await move(sam.id, id, bad)
+      expect(res.statusCode, JSON.stringify(bad)).toBe(400)
+      expect(res.json().error.code).toBe('illegal_move')
+    }
+    // Out of turn is GAME-005's 409, as for every game type.
+    expect((await move(dad.id, id, { row: 1, col: 0, orientation: 'h' })).statusCode).toBe(409)
 
     const after = (await gameEvents(id, alex.id)).events.filter((e) => e.type === 'game.move').length
     expect(after).toBe(before)
