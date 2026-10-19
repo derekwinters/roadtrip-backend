@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { FastifyInstance } from 'fastify'
 import type pg from 'pg'
 import { appendEvent } from '../events/store.js'
+import { gameEnabledKey, getConfig } from '../config.js'
 import { validateEventPayload } from '../events/schemas.js'
 import { AppError, conflict, forbidden, notFound, validation } from '../errors.js'
 import { getEngine, type GameType } from './registry.js'
@@ -105,6 +106,12 @@ async function lockGame(client: pg.PoolClient, id: string): Promise<GameRow> {
 }
 
 export async function createGame(app: FastifyInstance, creatorId: string, input: CreateGameInput): Promise<Record<string, unknown>> {
+  // GAME-021 / CFG-010: a parent-disabled type cannot be created, family-wide. This is the
+  // only lifecycle step that consults the switch — existing games play on (GAME-022).
+  const config = await getConfig(app.pool)
+  if (!config[gameEnabledKey(input.game_type)]) {
+    throw forbidden('game_disabled', `${input.game_type} games are turned off for this family`)
+  }
   if (input.mode === 'challenge' && !input.invited_profile_id) {
     throw validation('mode=challenge requires invited_profile_id')
   }

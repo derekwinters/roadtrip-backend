@@ -78,6 +78,20 @@ the fold stays deterministic (GAME-006).
   letters; 6 wrong guesses lose (win for setter), completing the phrase wins for the guesser.
   The setter never takes a turn.
 
+### Family-wide enable/disable per game type (GAME-021, GAME-022)
+
+Parents can switch individual game types off for the whole family with the boolean config keys
+`game_<type>_enabled` (CFG-010, `05-config.md`). A disabled type cannot be **created**:
+`POST /api/games` with that `game_type` is rejected **403** with error code `game_disabled`
+and persists nothing. Creation is the only gate — disabling a type never touches games that
+already exist: a game of that type that is active keeps accepting moves and resignations, and
+any game of that type (active, finished or abandoned) stays readable and replayable via
+`GET /api/games/{id}` and `GET /api/games/{id}/events`. Re-enabling the type allows creation
+again immediately (CFG-003).
+
+- **Invariant:** the enabled check reads config at create time; nothing else in the game
+  lifecycle (join, move, resign, read, replay) consults the `game_<type>_enabled` keys.
+
 ### Hangman end-game / resignation asymmetry (GAME-018)
 
 Consistent with "the setter never takes a turn", ending a hangman game is also asymmetric, and
@@ -154,3 +168,5 @@ stays deterministic (GAME-006).
 | GAME-018 | Hangman resignation is asymmetric (see below): the guesser cannot end the game — a resign from the guesser gets 403 and leaves the game active; only the setter/creator can end a hangman game, which **abandons** it (`status`/`result` = "abandoned", `winner_id` null, `game.abandoned` emitted) rather than producing a winner. | auto |
 | GAME-019 | Every `Game` serialization for a hangman game with folded state (active or finished) carries a top-level `hangman_display` string — the masked board (guessed letters revealed, unguessed as `_`, spaces preserved) — on **both** the list/lobby summary (`GET /api/games`, no engine `view`) and `GET /api/games/{id}`, so the lobby can show progress without a per-game view fetch. It reuses the exact `view.display` masking and is **viewerless**: for an ongoing game it NEVER contains an unguessed letter (not even for the setter); once finished it may show the fully revealed word. It is omitted/absent for non-hangman games and for open hangman games that have no state yet. | auto |
 | GAME-020 | Four in a Row (`fourinarow`) plays on a 7×6 board: the creator moves first; a `{ column: 0..6 }` move drops a disc into the lowest empty row of that column; four in a line horizontally, vertically or on either diagonal wins for that player, and a full board with no line is a draw; a full column, an out-of-range column, a malformed payload, an out-of-turn move and a move after the game is over are rejected. The view is viewerless (`board` 6×7 with row 0 = bottom, `discs`, `turn`, `players`) and the recorded `game.move` is normalized to `{ column, row }` with an advisory landing `row`. | auto |
+| GAME-021 | `POST /api/games` for a game type whose `game_<type>_enabled` key (CFG-010) is `false` is rejected **403** with error code `game_disabled` and persists no `game.created` event and no game row; creating a type whose key is `true` succeeds as usual (GAME-001), and a toggle takes effect on the next create without a restart. | auto |
+| GAME-022 | Disabling a game type does not affect games that already exist: an active game of a type disabled after it started still accepts moves (GAME-004/005) and resignation (GAME-015/018), and any game of a disabled type remains readable and replayable via `GET /api/games/{id}` and `GET /api/games/{id}/events` (GAME-008). | auto |
