@@ -78,7 +78,7 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
   'game.created': z
     .object({
       game_id: uuid,
-      game_type: z.enum(['chess', 'checkers', 'tictactoe', 'ultimate', 'hangman']),
+      game_type: z.enum(['chess', 'checkers', 'tictactoe', 'ultimate', 'hangman', 'fourinarow']),
       mode: z.enum(['open', 'challenge']),
       invited_profile_id: uuid.optional(),
       options: z.record(z.string(), z.unknown()).default({}),
@@ -89,7 +89,7 @@ export const eventPayloadSchemas: Record<string, z.ZodTypeAny> = {
   'game.finished': z
     .object({
       game_id: uuid,
-      game_type: z.enum(['chess', 'checkers', 'tictactoe', 'ultimate', 'hangman']),
+      game_type: z.enum(['chess', 'checkers', 'tictactoe', 'ultimate', 'hangman', 'fourinarow']),
       result: z.enum(['win', 'draw']),
       winner_profile_id: uuid.optional(),
       loser_profile_id: uuid.optional(),

@@ -234,6 +234,78 @@ describe('moves', () => {
   })
 })
 
+describe('Four in a Row over the API', () => {
+  async function activeFourInARow(): Promise<string> {
+    const created = await createGame(dad.id, { game_type: 'fourinarow', mode: 'open' })
+    expect(created.statusCode, created.body).toBe(201)
+    expect(created.json()).toMatchObject({ game_type: 'fourinarow', status: 'open' })
+    const id = created.json().id
+    expect((await join(sam.id, id)).statusCode).toBe(200)
+    return id
+  }
+
+  it('plays create → join → moves → finished end to end and records the landing row [GAME-020]', async () => {
+    const id = await activeFourInARow()
+
+    const first = await move(dad.id, id, { column: 3 })
+    expect(first.statusCode).toBe(200)
+    expect(first.json().view).toMatchObject({ discs: [dad.id, sam.id], turn: sam.id, players: [dad.id, sam.id] })
+    expect(first.json().view.board[0][3]).toBe(0)
+
+    const script: Array<[string, number]> = [
+      [sam.id, 3],
+      [dad.id, 4],
+      [sam.id, 4],
+      [dad.id, 5],
+      [sam.id, 5],
+      [dad.id, 6], // dad completes the bottom row 3..6
+    ]
+    let last: any
+    for (const [by, column] of script) {
+      const res = await move(by, id, { column })
+      expect(res.statusCode, res.body).toBe(200)
+      last = res.json()
+    }
+    expect(last).toMatchObject({ status: 'finished', result: 'win', winner_id: dad.id, move_count: 7, turn: null })
+
+    const { events } = await gameEvents(id, alex.id)
+    expect(events.find((e) => e.type === 'game.created').payload).toMatchObject({ game_type: 'fourinarow' })
+    expect(events.find((e) => e.type === 'game.finished').payload).toMatchObject({
+      game_type: 'fourinarow',
+      result: 'win',
+      winner_profile_id: dad.id,
+      loser_profile_id: sam.id,
+      move_count: 7,
+    })
+    const recorded = events.filter((e) => e.type === 'game.move').map((e) => e.payload.move)
+    expect(recorded.slice(0, 2)).toEqual([
+      { column: 3, row: 0 },
+      { column: 3, row: 1 },
+    ])
+
+    const { rows } = await t.db.pool.query('SELECT game_type, status FROM games WHERE id = $1', [id])
+    expect(rows[0]).toEqual({ game_type: 'fourinarow', status: 'finished' })
+  })
+
+  it('rejects a full column, an out-of-range column and a malformed move with 400 and no event [GAME-020] [GAME-004]', async () => {
+    const id = await activeFourInARow()
+    for (let i = 0; i < 6; i++) {
+      expect((await move(i % 2 === 0 ? dad.id : sam.id, id, { column: 0 })).statusCode).toBe(200)
+    }
+    const before = (await gameEvents(id, alex.id)).events.filter((e) => e.type === 'game.move').length
+
+    const full = await move(dad.id, id, { column: 0 })
+    expect(full.statusCode).toBe(400)
+    expect(full.json().error.code).toBe('illegal_move')
+    expect(full.json().error.message).toMatch(/full/i)
+    expect((await move(dad.id, id, { column: 7 })).statusCode).toBe(400)
+    expect((await move(dad.id, id, { cell: 3 })).statusCode).toBe(400)
+
+    const after = (await gameEvents(id, alex.id)).events.filter((e) => e.type === 'game.move').length
+    expect(after).toBe(before)
+  })
+})
+
 describe('views and streams', () => {
   it('GET /api/games/{id} returns the engine view with turn and players [GAME-008]', async () => {
     const id = await activeTtt()

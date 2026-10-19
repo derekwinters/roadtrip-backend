@@ -457,7 +457,7 @@ paths:
               type: object
               required: [game_type, mode]
               properties:
-                game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman] }
+                game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman, fourinarow] }
                 mode: { enum: [open, challenge] }
                 invited_profile_id: { type: string, format: uuid }
                 options:
@@ -872,7 +872,7 @@ components:
       required: [id, game_type, mode, status, created_by]
       properties:
         id: { type: string, format: uuid }
-        game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman] }
+        game_type: { enum: [chess, checkers, tictactoe, ultimate, hangman, fourinarow] }
         mode: { enum: [open, challenge] }
         status: { enum: [open, active, finished, abandoned] }
         created_by: { type: string, format: uuid }

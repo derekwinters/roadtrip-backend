@@ -51,7 +51,7 @@ read models over them:
 - **Map/progress** — breadcrumb, current position, active destination, leg mileage.
 - **Location engine** — server-side stop detection (backdated to the first stationary ping),
   offline reverse geocoding from bundled datasets, arrival detection, leg summaries.
-- **Games** — chess, checkers, tic-tac-toe, ultimate tic-tac-toe, hangman; every move is an
+- **Games** — chess, checkers, tic-tac-toe, ultimate tic-tac-toe, hangman, Four in a Row; every move is an
   event, which gives lobby, challenges, spectating, and replays from one design.
 - **Sync** — clients upload queued events with client-generated UUIDs; retries are idempotent;
   downloads are cursor-paged with long-polling.

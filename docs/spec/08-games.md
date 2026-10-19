@@ -1,7 +1,7 @@
 # 08 — Games (GAME)
 
-Turn-based only (product decision). Five games: **chess, checkers, tic-tac-toe, ultimate
-tic-tac-toe, hangman**. All games are **event-sourced**: every move is a `game.move` event, and
+Turn-based only (product decision). Six games: **chess, checkers, tic-tac-toe, ultimate
+tic-tac-toe, hangman, Four in a Row** (wire value `fourinarow`). All games are **event-sourced**: every move is a `game.move` event, and
 the server-side engine state is a pure fold over the game's event stream. That one design gives
 lobby, challenge, spectate, and replay for free.
 
@@ -39,7 +39,15 @@ interface GameEngine<S, M> {
 
 ### Move coordinate representation (grid games)
 
-Both grid games — **chess and checkers** — use the **same algebraic square notation** so a
+The grid games use **three deliberately distinct move shapes**, one per kind of move:
+
+| Game(s) | Move shape | Why |
+|---------|-----------|-----|
+| chess, checkers | `{ from, to }` (algebraic squares, below) | a piece travels from an origin square to a destination |
+| tic-tac-toe | `{ cell: 0..8 }` (ultimate adds `board: 0..8`) | a mark is placed on any empty cell; there is no origin |
+| Four in a Row | `{ column: 0..6 }` | a disc is dropped into a column; the landing row is **derived by gravity**, so the column alone is the whole move |
+
+The two piece-moving grid games — **chess and checkers** — use the **same algebraic square notation** so a
 single client move shape works for both (`{ from, to }`, each matching `^[a-h][1-8]$`). Files
 `a`–`h` run left→right, ranks `1`–`8` bottom→top. Internally checkers keeps its board as a
 `[row][col]` array (`row`, `col` = `0..7`); the mapping is **`file = 'a' + col`,
@@ -57,6 +65,12 @@ clients render captures and infer crownings from the destination rank without re
 board. Re-applying a recorded move ignores `captured` (it is re-derived from the position), so
 the fold stays deterministic (GAME-006).
 - Tic-tac-toe: 3×3, X = creator.
+- Four in a Row (`fourinarow`): 7 columns × 6 rows; the creator (`players[0]`) moves first.
+  A move is `{ column: 0..6 }` and the disc lands in the **lowest empty row** of that column.
+  Four of one player's discs in a line — horizontal, vertical, or either diagonal — wins; all
+  42 cells filled with no line is a draw. A full column, a column outside `0..6`, a malformed
+  payload, a move out of turn, or any move once the game is over is rejected. Nothing is
+  hidden, so the view is viewerless. Resigning follows the symmetric rule (GAME-015).
 - Ultimate tic-tac-toe: 9 sub-boards; a move dictates the opponent's next sub-board; won
   sub-boards form the macro board; a full sub-board without a winner counts for neither side;
   if the dictated sub-board is decided/full, the player may choose any open sub-board.
@@ -91,6 +105,31 @@ deliberately differs from the symmetric-game resign rule (GAME-015):
 - Even with dictionary off: per-word length cap of 15; phrases allowed with visible word
   boundaries (wheel-of-fortune style), max 3 words / 30 letters total; letters A–Z only.
 
+### Four in a Row board and recorded move (GAME-020)
+
+The board is a `[row][column]` grid of 6 rows × 7 columns with **row 0 at the bottom** (row 5
+is the top), so a disc's row index equals the number of discs already in its column when it
+was dropped. Each cell is `0` (a `players[0]` disc), `1` (a `players[1]` disc) or `null`.
+
+The engine `view` (same for every viewer) is:
+
+```jsonc
+{
+  "board": [[0, 1, null, null, null, null, null], …],  // 6 rows × 7 columns, row 0 = bottom
+  "discs": ["<players[0] profile id>", "<players[1] profile id>"],  // cell value → profile
+  "turn": "<profile id of the player to move>",
+  "players": ["<creator id>", "<joiner id>"]
+}
+```
+
+The recorded `game.move` payload is normalized to `{ column, row }`, where `row` is the landing
+row the disc came to rest in (row 0 = bottom). `row` is **advisory**, like checkers' `captured`:
+re-applying a recorded move ignores it and re-derives the landing row by gravity, so the fold
+stays deterministic (GAME-006).
+
+- **Invariant:** the landing row is always derived from the column's current fill, never taken
+  from the client's payload — a submitted or recorded `row` cannot place a disc.
+
 ## Requirements
 
 | ID | Requirement | Verify |
@@ -114,3 +153,4 @@ deliberately differs from the symmetric-game resign rule (GAME-015):
 | GAME-017 | Tic-tac-toe detects wins on rows/columns/diagonals and draws on a full board. | auto |
 | GAME-018 | Hangman resignation is asymmetric (see below): the guesser cannot end the game — a resign from the guesser gets 403 and leaves the game active; only the setter/creator can end a hangman game, which **abandons** it (`status`/`result` = "abandoned", `winner_id` null, `game.abandoned` emitted) rather than producing a winner. | auto |
 | GAME-019 | Every `Game` serialization for a hangman game with folded state (active or finished) carries a top-level `hangman_display` string — the masked board (guessed letters revealed, unguessed as `_`, spaces preserved) — on **both** the list/lobby summary (`GET /api/games`, no engine `view`) and `GET /api/games/{id}`, so the lobby can show progress without a per-game view fetch. It reuses the exact `view.display` masking and is **viewerless**: for an ongoing game it NEVER contains an unguessed letter (not even for the setter); once finished it may show the fully revealed word. It is omitted/absent for non-hangman games and for open hangman games that have no state yet. | auto |
+| GAME-020 | Four in a Row (`fourinarow`) plays on a 7×6 board: the creator moves first; a `{ column: 0..6 }` move drops a disc into the lowest empty row of that column; four in a line horizontally, vertically or on either diagonal wins for that player, and a full board with no line is a draw; a full column, an out-of-range column, a malformed payload, an out-of-turn move and a move after the game is over are rejected. The view is viewerless (`board` 6×7 with row 0 = bottom, `discs`, `turn`, `players`) and the recorded `game.move` is normalized to `{ column, row }` with an advisory landing `row`. | auto |
