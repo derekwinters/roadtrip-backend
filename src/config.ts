@@ -1,8 +1,32 @@
 import type { Db } from './db.js'
 import { validation } from './errors.js'
+import { GAME_TYPES, type GameType } from './games/registry.js'
+
+/** Family-wide game-type switch key for one game type (CFG-010). */
+export type GameEnabledKey = `game_${GameType}_enabled`
+
+export function gameEnabledKey(type: GameType): GameEnabledKey {
+  return `game_${type}_enabled`
+}
+
+/**
+ * Per-type defaults for the family-wide switches (CFG-010). Typed as a Record over GameType,
+ * so adding a game type without a default fails typecheck; the config keys are derived from
+ * this map and therefore can never drift from GAME_TYPES (CFG-010 invariant).
+ */
+const GAME_ENABLED_DEFAULTS: Record<GameType, boolean> = {
+  chess: true,
+  checkers: true,
+  tictactoe: true,
+  ultimate: true,
+  hangman: true,
+  fourinarow: true,
+}
+
+const GAME_ENABLED_KEYS: GameEnabledKey[] = GAME_TYPES.map(gameEnabledKey)
 
 /** Tunable parameters — defaults and bounds are normative in docs/spec/05-config.md. */
-export interface AppConfig {
+interface BaseConfig {
   ping_interval_s: number
   stop_radius_m: number
   min_stop_duration_min: number
@@ -16,8 +40,11 @@ export interface AppConfig {
   open_profile_creation: boolean
 }
 
-/** Boolean behavior flags (CFG-006, CFG-009). */
-type BooleanConfigKey = 'open_profile_creation' | 'track_cities_through' | 'track_cities_stopped'
+/** Every config key: the scalar tunables plus one switch per game type (CFG-010). */
+export type AppConfig = BaseConfig & Record<GameEnabledKey, boolean>
+
+/** Boolean behavior flags (CFG-006, CFG-009, CFG-010). */
+type BooleanConfigKey = 'open_profile_creation' | 'track_cities_through' | 'track_cities_stopped' | GameEnabledKey
 
 /** Numeric tunables, bounded below; boolean flags are typed by BOOLEAN_KEYS. */
 type NumericConfigKey = Exclude<keyof AppConfig, BooleanConfigKey>
@@ -34,6 +61,10 @@ export const CONFIG_DEFAULTS: AppConfig = {
   operational_log_max_rows: 1000,
   stop_label_max_chars: 80,
   open_profile_creation: true,
+  ...(Object.fromEntries(GAME_TYPES.map((t) => [gameEnabledKey(t), GAME_ENABLED_DEFAULTS[t]])) as Record<
+    GameEnabledKey,
+    boolean
+  >),
 }
 
 export const CONFIG_BOUNDS: Record<NumericConfigKey, [number, number]> = {
@@ -47,7 +78,12 @@ export const CONFIG_BOUNDS: Record<NumericConfigKey, [number, number]> = {
   stop_label_max_chars: [1, 2000],
 }
 
-const BOOLEAN_KEYS = new Set<keyof AppConfig>(['open_profile_creation', 'track_cities_through', 'track_cities_stopped'])
+const BOOLEAN_KEYS = new Set<keyof AppConfig>([
+  'open_profile_creation',
+  'track_cities_through',
+  'track_cities_stopped',
+  ...GAME_ENABLED_KEYS,
+])
 
 /** Numeric keys that must be whole numbers (CFG-007, CFG-008, CFG-009). */
 const INTEGER_KEYS = new Set<keyof AppConfig>(['operational_log_max_rows', 'stop_label_max_chars', 'city_min_population'])

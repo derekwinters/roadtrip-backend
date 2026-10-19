@@ -20,6 +20,12 @@ same seeding, reading, and parent-only-write rules.
 | `stop_label_max_chars` | 80 | 1–2000 (integer) | Longest user-supplied stop label accepted after trimming (LOC-015); longer labels are rejected, never truncated. |
 | `operational_log_max_rows` | 1000 | 1–100000 (integer) | Maximum number of rows kept in the operational log; the oldest are removed beyond it (see `15-operational-log.md`). |
 | `open_profile_creation` | true | boolean | While true, `POST /api/profiles` is open to everyone — unauthenticated and kid profiles included (PRO-009). Parents can turn it off to restore parent-only creation. |
+| `game_chess_enabled` | true | boolean | While false, new chess games cannot be created family-wide (GAME-021); games already started are unaffected (GAME-022). |
+| `game_checkers_enabled` | true | boolean | Same, for checkers. |
+| `game_tictactoe_enabled` | true | boolean | Same, for tic-tac-toe. |
+| `game_ultimate_enabled` | true | boolean | Same, for ultimate tic-tac-toe. |
+| `game_hangman_enabled` | true | boolean | Same, for hangman. |
+| `game_fourinarow_enabled` | true | boolean | Same, for Four in a Row. |
 
 ## Requirements
 
@@ -34,3 +40,9 @@ same seeding, reading, and parent-only-write rules.
 | CFG-007 | `operational_log_max_rows` is an integer key defaulting to `1000` (bounds 1–100000), seeded/self-healed like every key (CFG-005) and changeable only by parents via `PUT /api/config`; non-integer or out-of-bounds values are rejected 400 `validation` under the CFG-002 all-or-nothing rule. The operational log reads it at record time (OPLOG-004). | auto |
 | CFG-008 | `stop_label_max_chars` is an integer key defaulting to `80` (bounds 1–2000), seeded/self-healed like every key (CFG-005) and changeable only by parents via `PUT /api/config`; non-integer or out-of-bounds values are rejected 400 `validation` under the CFG-002 all-or-nothing rule. Sync reads it per batch when validating `location.stop.labeled` (LOC-015), so a change applies to the next batch without a restart. | auto |
 | CFG-009 | `city_min_population` is an integer key defaulting to `5000` (bounds 0–10000000), and `track_cities_through` / `track_cities_stopped` are boolean keys defaulting to `true`; `city_radius_km` defaults to `15`. All are seeded/self-healed like every key (CFG-005) and changeable only by parents via `PUT /api/config`; non-integer, non-boolean, or out-of-bounds values are rejected 400 `validation` under the CFG-002 all-or-nothing rule. The engine reads them per batch (CFG-004), so a change applies to pings processed after it and never re-evaluates pings already processed (LOC-001). | auto |
+| CFG-010 | Each game type in the GAME catalog (`08-games.md`) has a boolean key `game_<type>_enabled` (`game_chess_enabled`, `game_checkers_enabled`, `game_tictactoe_enabled`, `game_ultimate_enabled`, `game_hangman_enabled`, `game_fourinarow_enabled`) defaulting to `true`, seeded/self-healed like every key (CFG-005), readable by any profile (CFG-001) and togglable only by parents via `PUT /api/config`; non-boolean values are rejected 400 `validation` under the CFG-002 all-or-nothing rule, and a change emits `config.updated` with exactly the changed keys and applies to the next game creation without a restart (CFG-003). Game creation enforces them (GAME-021). | auto |
+
+- **Invariant (CFG-010):** the game-type keys are derived from the game type catalog — every
+  game type has exactly one `game_<type>_enabled` key and there is no such key for a type that
+  does not exist. Adding a game type adds its key; it is never a separately maintained list.
+- The game-type keys are family-wide: they gate every profile alike, parents included.

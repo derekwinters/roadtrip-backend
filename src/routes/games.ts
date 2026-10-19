@@ -45,7 +45,7 @@ export async function gameRoutes(app: FastifyInstance): Promise<void> {
     return listGames(app, q)
   })
 
-  // GAME-001/002 create (GAME-013: hangman word rules at create time).
+  // GAME-001/002 create (GAME-013: hangman word rules at create time; GAME-021: disabled types → 403).
   app.post('/api/games', { preHandler: [requireProfile] }, async (req, reply) => {
     const body = createSchema.parse(req.body ?? {})
     const game = await createGame(app, req.profile!.id, body)

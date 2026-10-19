@@ -12,7 +12,8 @@ contract follows.
 - Errors: `{ "error": { "code": string, "message": string } }` with proper status codes.
   Stable machine codes: `unauthenticated`, `parent_required`, `not_found`, `validation`,
   `not_your_turn`, `illegal_move`, `game_full`, `not_invited`, `conflict`,
-  `geocode_unavailable`.
+  `geocode_unavailable`, `game_disabled` (403 — the caller may not create a game of a type a
+  parent has disabled family-wide, GAME-021).
 - Cursors: event feeds use the event `seq` as an exclusive `after` cursor; the journal uses
   `before` for backward pagination. Long-poll via `wait=<1..30>` seconds.
 - Idempotency: client-generated UUID `event_id` on every synced event (EVT-001).
