@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0](https://github.com/derekwinters/roadtrip-backend/compare/v1.1.0...v1.2.0) (2026-10-19)
+
+
+### Features
+
+* **ai:** adopt shared ai-skills bundles (dev agent, skills, self-updater, pr-title-lint) ([#98](https://github.com/derekwinters/roadtrip-backend/issues/98)) ([4c971d3](https://github.com/derekwinters/roadtrip-backend/commit/4c971d33b4de0f39dfa1e09156f9cf0104d4b3cc))
+* **bingo:** accept Canadian provinces and territories as plates ([#159](https://github.com/derekwinters/roadtrip-backend/issues/159)) ([b3301ce](https://github.com/derekwinters/roadtrip-backend/commit/b3301ceb5a946b64da4fedf366549a03013ece07)), closes [#101](https://github.com/derekwinters/roadtrip-backend/issues/101)
+* **games:** add Dots and Boxes as a seventh game type ([#164](https://github.com/derekwinters/roadtrip-backend/issues/164)) ([a7a1ed3](https://github.com/derekwinters/roadtrip-backend/commit/a7a1ed366c13aed067fe4602a4643511a57f5198)), closes [#116](https://github.com/derekwinters/roadtrip-backend/issues/116)
+* **games:** add Four in a Row as a sixth game type ([#162](https://github.com/derekwinters/roadtrip-backend/issues/162)) ([e4ef18f](https://github.com/derekwinters/roadtrip-backend/commit/e4ef18f044e34cea08115cfebe88caccb8eee40e)), closes [#112](https://github.com/derekwinters/roadtrip-backend/issues/112)
+* **games:** let parents enable or disable game types family-wide ([#163](https://github.com/derekwinters/roadtrip-backend/issues/163)) ([2be3504](https://github.com/derekwinters/roadtrip-backend/commit/2be35045b9b1c8405620337a56968e487e24e787)), closes [#115](https://github.com/derekwinters/roadtrip-backend/issues/115)
+* **geocode:** keep geocode failure reasons in a durable operational log ([#155](https://github.com/derekwinters/roadtrip-backend/issues/155)) ([d2094c7](https://github.com/derekwinters/roadtrip-backend/commit/d2094c71203ad46c6865e93c46550a9aaa442a14)), closes [#89](https://github.com/derekwinters/roadtrip-backend/issues/89)
+* **location:** let parents label any stop with a user-supplied name ([#160](https://github.com/derekwinters/roadtrip-backend/issues/160)) ([63b0ea6](https://github.com/derekwinters/roadtrip-backend/commit/63b0ea66f9e3086b22069f84f32bd77a5b78f544)), closes [#104](https://github.com/derekwinters/roadtrip-backend/issues/104)
+* **location:** track drive-through cities with configurable population and stop/through toggles ([#161](https://github.com/derekwinters/roadtrip-backend/issues/161)) ([307871c](https://github.com/derekwinters/roadtrip-backend/commit/307871ce348ad93edb36d2508690ae384a55efe6)), closes [#100](https://github.com/derekwinters/roadtrip-backend/issues/100)
+
+
+### Bug Fixes
+
+* **deps:** migrate to zod 4 ([#156](https://github.com/derekwinters/roadtrip-backend/issues/156)) ([e44c15d](https://github.com/derekwinters/roadtrip-backend/commit/e44c15d320f0c3fdaea56e6d7b02c8359e511b74)), closes [#150](https://github.com/derekwinters/roadtrip-backend/issues/150)
+
 ## [1.1.0](https://github.com/derekwinters/roadtrip-backend/compare/v1.0.0...v1.1.0) (2026-07-20)
 
 
